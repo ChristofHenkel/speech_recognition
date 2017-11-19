@@ -113,9 +113,16 @@ if __name__ == '__main__':
 
     # bug mac cannot write more than 2GB to pickle file
     with open(SAVE_PATH + 'train.soundcorpus.part1.p','wb') as f:
-        pickle.dump(train_corpus[:30000],f)
+        pickler = pickle.Pickler(f)
+        for e in train_corpus[:30000]:
+            pickler.dump(e)
+
+
     with open(SAVE_PATH + 'train.soundcorpus.part2.p','wb') as f:
-        pickle.dump(train_corpus[30000:],f)
+        pickler = pickle.Pickler(f)
+        for e in train_corpus[30000:]:
+            pickler.dump(e)
+
 
     gen_val = SoundCorpusCreator(valset)
 

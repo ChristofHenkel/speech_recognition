@@ -27,7 +27,7 @@ class BatchGen:
                     # reshape to np arrays
                     x = np.asarray(x)
                     y = np.asarray(y)
-                    y = np.reshape(y, (self.bsize,1))
+                    #y = np.reshape(y, (self.bsize,1))
                     yield x, y
                     x = []
                     y = []
