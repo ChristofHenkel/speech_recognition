@@ -75,7 +75,7 @@ class SoundCorpusCreator:
 
                 L = 16000  # be aware, some files are shorter than 1 sec!
                 if len(wav) < L:
-                    wav = self.preprocessing(wav)
+                    # wav = self.preprocessing(wav)
                     """
                     # This might be helpful to compute mfcc
                     y, sr = librosa.load(librosa.util.example_audio_file())
@@ -137,27 +137,21 @@ if __name__ == '__main__':
 
     train_corpus = gen_train.build_corpus()
 
-    # bug mac cannot write more than 2GB to pickle file
-    with open(SAVE_PATH + 'train.soundcorpus.part1.p','wb') as f:
+    # using incrementally pickle to stream from later
+    with open(SAVE_PATH + 'train.soundcorpus.p','wb') as f:
         pickler = pickle.Pickler(f)
-        for e in train_corpus[:30000]:
+        for e in train_corpus:
             pickler.dump(e)
-
-
-    with open(SAVE_PATH + 'train.soundcorpus.part2.p','wb') as f:
-        pickler = pickle.Pickler(f)
-        for e in train_corpus[30000:]:
-            pickler.dump(e)
-
 
     gen_val = SoundCorpusCreator(valset)
 
     val_corpus = gen_val.build_corpus()
 
-    with open(SAVE_PATH + 'validation.soundcorpus.part1.p', 'wb') as f:
+    with open(SAVE_PATH + 'valid.soundcorpus.p', 'wb') as f:
         pickler = pickle.Pickler(f)
         for e in val_corpus:
             pickler.dump(e)
 
+    # should also save len of train and valid data
     with open(SAVE_PATH + 'nameiddict.p','wb') as f:
         pickle.dump((id2name,name2id),f)
