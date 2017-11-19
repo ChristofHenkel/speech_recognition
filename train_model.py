@@ -100,12 +100,13 @@ with graph.as_default():
         global_step=iteration)
 
     #probs = tf.nn.softmax(logits2)
-    #pred = tf.argmax(logits2, 1)
-    #correct_pred = tf.equal(pred, tf.reshape(y, [-1]))
-    #accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-
     pred = tf.argmax(logits2, axis=-1)
-    accuracy, acc_op = tf.metrics.mean_per_class_accuracy(y, pred, num_classes)
+    #pred = tf.argmax(logits2, 1)
+    correct_pred = tf.equal(pred, tf.reshape(y, [-1]))
+    accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+
+    #pred = tf.argmax(logits2, axis=-1)
+    #accuracy, acc_op = tf.metrics.mean_per_class_accuracy(y, pred, num_classes)
 
 # Launch the graph
 # TESTING
