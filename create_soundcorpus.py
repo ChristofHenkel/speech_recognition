@@ -1,7 +1,3 @@
-"""
-# Good MFCC explanation: 
-http://haythamfayek.com/2016/04/21/speech-processing-for-machine-learning.html
-"""
 import re
 from glob import glob
 import os
@@ -74,14 +70,9 @@ class SoundCorpusCreator:
                 wav = wav.astype(np.float32) / np.iinfo(np.int16).max
 
                 L = 16000  # be aware, some files are shorter than 1 sec!
+                #wav, sr = librosa.load(fname, L)
                 if len(wav) < L:
-                    wav = self.preprocessing(wav)
-                    """
-                    # This might be helpful to compute mfcc
-                    y, sr = librosa.load(librosa.util.example_audio_file())
-                    S = librosa.feature.melspectrogram(y=y, sr=sr,n_mels=128, fmax=8000)
-                    mfccs = librosa.feature.mfcc(S=librosa.power_to_db(S))                    
-                    """
+                    wav = self.preemphasis(wav)
                     continue
                 # let's generate more silence!
                 samples_per_file = 1 if label_id != name2id['silence'] else 20
@@ -100,16 +91,10 @@ class SoundCorpusCreator:
 
             except Exception as err:
                 print(err, label_id, uid, fname)
-    
-    
-    def preprocessing(self, wav):
-        wav = self.preempahsis(wav)
-        return wav
-    
-    @staticmethod
-    def preemphasis(signal):
+
+    def preemphasis(self, wav):
         pre_emphasis = 0.97
-        emphasized_signal = np.append(signal[0], signal[1:] - pre_emphasis * signal[:-1])
+        emphasized_signal = np.append(wav[0], wav[1:] - pre_emphasis * wav[:-1])
         return emphasized_signal
     
     def build_corpus(self, max = None, fn = None):

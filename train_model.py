@@ -1,3 +1,8 @@
+"""
+# Good MFCC explanation:
+http://haythamfayek.com/2016/04/21/speech-processing-for-machine-learning.html
+"""
+
 from batch_gen import BatchGen
 import tensorflow as tf
 from tensorflow.contrib import layers, signal
@@ -49,11 +54,37 @@ with graph.as_default():
         x,
         400,  # 16000 [samples per second] * 0.025 [s] -- default stft window frame
         160,  # 16000 * 0.010 -- default stride
+
     )
     # specgram is a complex tensor, so split it into abs and phase parts:
     phase = tf.angle(specgram) / np.pi
     # log(1 + abs) is a default transformation for energy units
     amp = tf.log1p(tf.abs(specgram))
+
+    """
+    Compute MFCC using Tensorflow functions
+    # A 400-point STFT with frames of 25 ms and 10 ms overlap.
+    stfts = tf.contrib.signal.stft(pcm, frame_length=400, frame_step=160,
+                                   fft_length=400)
+    spectrograms = tf.abs(stft)
+    
+    # Warp the linear scale spectrograms into the mel-scale.
+    num_spectrogram_bins = stfts.shape[-1].value
+    lower_edge_hertz, upper_edge_hertz, num_mel_bins = 80.0, 7600.0, 80
+    linear_to_mel_weight_matrix = tf.contrib.signal.linear_to_mel_weight_matrix(
+      num_mel_bins, num_spectrogram_bins, sample_rate, lower_edge_hertz,
+      upper_edge_hertz)
+    mel_spectrograms = tf.tensordot(spectrograms, linear_to_mel_weight_matrix, 1)
+    mel_spectrograms.set_shape(spectrograms.shape[:-1].concatenate(
+      linear_to_mel_weight_matrix.shape[-1:]))
+    
+    # Compute a stabilized log to get log-magnitude mel-scale spectrograms.
+    log_mel_spectrograms = tf.log(mel_spectrograms + 1e-6)
+    
+    # Compute MFCCs from log_mel_spectrograms and take the first 13.
+    mfccs = tf.contrib.signal.mfccs_from_log_mel_spectrograms(
+      log_mel_spectrograms)[..., :13]
+    """
 
     x2 = tf.stack([amp, phase], axis=3)  # shape is [bs, time, freq_bins, 2]
     x2 = tf.to_float(x2)
