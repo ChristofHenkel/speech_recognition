@@ -13,8 +13,8 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 class Config:
-    soundcorpus_fp = 'assets/corpora/corpus1/train.soundcorpus.p'
-    batch_size = 100
+    soundcorpus_fp = 'assets/corpora/corpus3/trainp.soundcorpus.p'
+    batch_size = 128
     size = 16000
     is_training = True
     use_batch_norm = True
@@ -29,9 +29,6 @@ cfg = Config()
 gen = BatchGen(batch_size = cfg.batch_size,soundcorpus_fp = cfg.soundcorpus_fp)
 decoder = gen.decoder
 num_classes=len(decoder)
-
-# x,y = next(gen.batch_gen())
-
 
 # Define Graph
 
@@ -92,15 +89,40 @@ with graph.as_default():
     # x2 = tf.stack([mfccs, delta_mfccs, dd_mfccs], axis=3)  # shape is [bs, time, freq_bins, ???]
 
     x2 = layers.batch_norm(x2, is_training=is_training)
-    # 16 32 64 128
-    for i in range(4):
-        x2 = layers.conv2d(
-            x2, 16 * (2 ** i), 3, 1,
-            activation_fn=tf.nn.elu,
-            normalizer_fn=layers.batch_norm if cfg.use_batch_norm else None,
-            normalizer_params={'is_training': is_training}
-        )
-        x2 = layers.max_pool2d(x2, 2, 2)
+
+
+    #
+    # Convlayer1 input dim [], output dim []
+    x2 = layers.conv2d(x2, 16, 3, 1,
+                       activation_fn=tf.nn.elu,
+                       normalizer_fn=layers.batch_norm if cfg.use_batch_norm else None,
+                       normalizer_params={'is_training': is_training}
+                       )
+    x2 = layers.max_pool2d(x2, 2, 2)
+
+    # Convlay2
+    x2 = layers.conv2d(x2, 32, 3, 1,
+                       activation_fn=tf.nn.elu,
+                       normalizer_fn=layers.batch_norm if cfg.use_batch_norm else None,
+                       normalizer_params={'is_training': is_training}
+                       )
+    x2 = layers.max_pool2d(x2, 2, 2)
+
+    # Convlay3
+    x2 = layers.conv2d(x2, 64, 3, 1,
+                       activation_fn=tf.nn.elu,
+                       normalizer_fn=layers.batch_norm if cfg.use_batch_norm else None,
+                       normalizer_params={'is_training': is_training}
+                       )
+    x2 = layers.max_pool2d(x2, 2, 2)
+
+    # Convlay4
+    x2 = layers.conv2d(x2, 128, 3, 1,
+                       activation_fn=tf.nn.elu,
+                       normalizer_fn=layers.batch_norm if cfg.use_batch_norm else None,
+                       normalizer_params={'is_training': is_training}
+                       )
+    x2 = layers.max_pool2d(x2, 2, 2)
 
     ## just take two kind of pooling and then mix them, why not :)
     mpool = tf.reduce_max(x2, axis=[1, 2], keep_dims=True)
@@ -112,13 +134,12 @@ with graph.as_default():
     x2 = tf.nn.dropout(x2, keep_prob=keep_prob)
 
     # again conv2d 1x1 instead of dense layer
-    logits = layers.conv2d(x2, num_classes, 1, 1, activation_fn=None)
-    logits2 = tf.squeeze(logits, [1, 2])
+    x2 = layers.conv2d(x2, num_classes, 1, 1, activation_fn=None)
+    logits = tf.squeeze(x2, [1, 2])
 
 
-    #logits = specgram
     loss = tf.reduce_mean(
-        tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=logits2))
+        tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=logits))
 
 
     gradients, _ = tf.clip_by_global_norm(tf.gradients(loss, tf.trainable_variables()),
@@ -133,7 +154,7 @@ with graph.as_default():
         global_step=iteration)
 
     #probs = tf.nn.softmax(logits2)
-    pred = tf.argmax(logits2, axis=-1)
+    pred = tf.argmax(logits, axis=-1)
     #pred = tf.argmax(logits2, 1)
     correct_pred = tf.equal(pred, tf.reshape(y, [-1]))
     accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
