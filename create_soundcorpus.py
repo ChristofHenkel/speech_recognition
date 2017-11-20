@@ -8,6 +8,13 @@ import pickle
 
 logging.basicConfig(level=logging.DEBUG)
 
+class SC_Config:
+    def __init__(self, mode='train'):
+        self.padding = True
+        self.mfcc = False
+        self.mode = mode
+        self.data_dir = 'assets/'
+        self.save_dir = self.data_dir + 'corpora/corpus3/'
 
 POSSIBLE_LABELS = 'yes no up down left right on off stop go silence unknown'.split()
 id2name = {i: name for i, name in enumerate(POSSIBLE_LABELS)}
@@ -56,12 +63,17 @@ def load_data(data_dir):
 
 class SoundCorpusCreator:
     """Docu goes here"""
-    def __init__(self, data, mode = 'train'):
+    def __init__(self, data, config):
         self.data = data
-        self.mode = mode
-        self.config = {}
+        self.config = config
+        self.size = len(self.data)
+        self.flags = []
+        if self.config.padding:
+            self.flags.append('p')
+        if self.config.mfcc:
+            self.flags.append('m')
     def __iter__(self):
-        if self.mode == 'train':
+        if self.config.mode == 'train':
             np.random.shuffle(self.data)
         # Feel free to add any augmentation
         for (label_id, uid, fname) in self.data:
@@ -70,10 +82,27 @@ class SoundCorpusCreator:
                 wav = wav.astype(np.float32) / np.iinfo(np.int16).max
 
                 L = 16000  # be aware, some files are shorter than 1 sec!
-                #wav, sr = librosa.load(fname, L)
-                if len(wav) < L:
-                    wav = self.preemphasis(wav)
-                    continue
+
+                len_wav = len(wav)
+                if len_wav < L:
+                    if self.config.padding:
+                        # todo: test
+                        # randomly insert wav into a 16k zero pad
+                        padded = np.zeros([L])
+                        start = np.random.randint(0,L-len_wav)
+                        end = start + len_wav
+                        padded[start:end] = wav
+                        wav = padded
+
+                    # wav = self.preprocessing(wav)
+                    """
+                    # This might be helpful to compute mfcc
+                    y, sr = librosa.load(librosa.util.example_audio_file())
+                    S = librosa.feature.melspectrogram(y=y, sr=sr,n_mels=128, fmax=8000)
+                    mfccs = librosa.feature.mfcc(S=librosa.power_to_db(S))                    
+                    """
+                    # continue
+
                 # let's generate more silence!
                 samples_per_file = 1 if label_id != name2id['silence'] else 20
                 for _ in range(samples_per_file):
@@ -88,52 +117,56 @@ class SoundCorpusCreator:
 
             except Exception as err:
                 print(err, label_id, uid, fname)
+    
+    def preprocessing(self, wav):
+        wav = self.preemphasis(wav)
+        return wav
+    
 
     def preemphasis(self, wav):
         pre_emphasis = 0.97
         emphasized_signal = np.append(wav[0], wav[1:] - pre_emphasis * wav[:-1])
         return emphasized_signal
     
-    def build_corpus(self, max = None, fn = None):
+    def build_corpus(self):
         corpus = []
         k = 0
         for date in self:
             if k % 100 == 0:
-                logging.debug('progress: ' + str(k))
+                logging.debug('progress: ' + str(k) + '/' + str(self.size))
             corpus.append(date)
             k += 1
-        if fn is None:
-            return corpus
-        else:
-            with open(fn,'wb') as f:
-                pickle.dump(corpus,f)
-            return 0
+        save_name = self.config.save_dir
+        save_name += self.config.mode + '.'
+        save_name += ''.join(self.flags)
+        save_name += '.soundcorpus.p'
+        logging.info('saving under: ' + save_name)
+        with open(save_name, 'wb') as f:
+            pickler = pickle.Pickler(f)
+            for e in corpus:
+                pickler.dump(e)
 
 
 if __name__ == '__main__':
-    DATADIR = 'assets/'
-    SAVE_PATH = DATADIR + 'corpora/corpus1/'
 
-    trainset, valset = load_data(DATADIR)
-    gen_train = SoundCorpusCreator(trainset)
+    cfg_train = SC_Config(mode='train')
+    trainset, valset = load_data(cfg_train.data_dir)
 
-    train_corpus = gen_train.build_corpus()
+
+    gen_train = SoundCorpusCreator(trainset,cfg_train)
+    gen_train.build_corpus()
 
     # using incrementally pickle to stream from later
-    with open(SAVE_PATH + 'train.soundcorpus.p','wb') as f:
-        pickler = pickle.Pickler(f)
-        for e in train_corpus:
-            pickler.dump(e)
 
-    gen_val = SoundCorpusCreator(valset)
-
-    val_corpus = gen_val.build_corpus()
-
-    with open(SAVE_PATH + 'valid.soundcorpus.p', 'wb') as f:
-        pickler = pickle.Pickler(f)
-        for e in val_corpus:
-            pickler.dump(e)
+    cfg_valid = SC_Config(mode='valid')
+    gen_val = SoundCorpusCreator(valset,cfg_valid)
+    gen_val.build_corpus()
 
     # should also save len of train and valid data
-    with open(SAVE_PATH + 'nameiddict.p','wb') as f:
-        pickle.dump((id2name,name2id),f)
+    info_dict = {'id2name': id2name,
+                 'name2id': name2id,
+                 'len_train': len(trainset),
+                 'len_valid': len(valset)
+                 }
+    with open(cfg_train.save_dir + 'infos.p','wb') as f:
+        pickle.dump(info_dict,f)
