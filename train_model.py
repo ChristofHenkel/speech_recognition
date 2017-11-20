@@ -60,35 +60,36 @@ with graph.as_default():
     phase = tf.angle(specgram) / np.pi
     # log(1 + abs) is a default transformation for energy units
     amp = tf.log1p(tf.abs(specgram))
-
-    """
-    Compute MFCC using Tensorflow functions
-    # A 400-point STFT with frames of 25 ms and 10 ms overlap.
-    stfts = tf.contrib.signal.stft(pcm, frame_length=400, frame_step=160,
-                                   fft_length=400)
-    spectrograms = tf.abs(stft)
-    
-    # Warp the linear scale spectrograms into the mel-scale.
-    num_spectrogram_bins = stfts.shape[-1].value
-    lower_edge_hertz, upper_edge_hertz, num_mel_bins = 80.0, 7600.0, 80
-    linear_to_mel_weight_matrix = tf.contrib.signal.linear_to_mel_weight_matrix(
-      num_mel_bins, num_spectrogram_bins, sample_rate, lower_edge_hertz,
-      upper_edge_hertz)
-    mel_spectrograms = tf.tensordot(spectrograms, linear_to_mel_weight_matrix, 1)
-    mel_spectrograms.set_shape(spectrograms.shape[:-1].concatenate(
-      linear_to_mel_weight_matrix.shape[-1:]))
-    
-    # Compute a stabilized log to get log-magnitude mel-scale spectrograms.
-    log_mel_spectrograms = tf.log(mel_spectrograms + 1e-6)
-    
-    # Compute MFCCs from log_mel_spectrograms and take the first 13.
-    mfccs = tf.contrib.signal.mfccs_from_log_mel_spectrograms(
-      log_mel_spectrograms)[..., :13]
-    """
-
     x2 = tf.stack([amp, phase], axis=3)  # shape is [bs, time, freq_bins, 2]
     x2 = tf.to_float(x2)
 
+    # # Compute MFCC using Tensorflow functions
+    # # A 400-point STFT with frames of 25 ms and 10 ms overlap.
+    # sample_rate = 16000
+    # stfts = tf.contrib.signal.stft(x, frame_length=400, frame_step=160,
+    #                                fft_length=400)
+    # spectrograms = tf.abs(stfts)
+    #
+    # # Warp the linear scale spectrograms into the mel-scale.
+    # num_spectrogram_bins = stfts.shape[-1].value
+    # lower_edge_hertz, upper_edge_hertz, num_mel_bins = 80.0, 7600.0, 80
+    # linear_to_mel_weight_matrix = tf.contrib.signal.linear_to_mel_weight_matrix(
+    #   num_mel_bins, num_spectrogram_bins, sample_rate, lower_edge_hertz,
+    #   upper_edge_hertz)
+    # mel_spectrograms = tf.tensordot(spectrograms, linear_to_mel_weight_matrix, 1)
+    # mel_spectrograms.set_shape(spectrograms.shape[:-1].concatenate(
+    #   linear_to_mel_weight_matrix.shape[-1:]))
+    #
+    # # Compute a stabilized log to get log-magnitude mel-scale spectrograms.
+    # log_mel_spectrograms = tf.log(mel_spectrograms + 1e-6)
+    #
+    # # Compute MFCCs from log_mel_spectrograms and take the first 13.
+    # mfccs = tf.contrib.signal.mfccs_from_log_mel_spectrograms(
+    #   log_mel_spectrograms)[..., :13]
+    # mfccs = tf.Print(mfccs, [mfccs], message="MFCCs: ")
+    # delta_mfccs = np.append(mfccs[0], mfccs[1:] - mfccs[:-1])
+    # dd_mfccs = np.append(delta_mfccs[0], delta_mfccs[1:] - delta_mfccs[:-1])
+    # x2 = tf.stack([mfccs, delta_mfccs, dd_mfccs], axis=3)  # shape is [bs, time, freq_bins, ???]
 
     x2 = layers.batch_norm(x2, is_training=is_training)
     for i in range(4):
