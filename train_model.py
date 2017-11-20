@@ -8,7 +8,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 class Config:
-    soundcorpus_fp = 'assets/corpora/corpus1/train.soundcorpus.part1.p'
+    soundcorpus_fp = 'assets/corpora/corpus1/train.soundcorpus.p'
     batch_size = 100
     size = 16000
     is_training = True
@@ -16,9 +16,9 @@ class Config:
     keep_prob = 0.9
     max_gradient = 5
     learning_rate = 1
-    training_iters = 30000
+    training_iters = 52200
     display_step = 10
-    epochs = 1
+    epochs = 2
 
 cfg = Config()
 gen = BatchGen(batch_size = cfg.batch_size,soundcorpus_fp = cfg.soundcorpus_fp)
@@ -60,6 +60,7 @@ with graph.as_default():
 
 
     x2 = layers.batch_norm(x2, is_training=is_training)
+    # 16 32 64 128
     for i in range(4):
         x2 = layers.conv2d(
             x2, 16 * (2 ** i), 3, 1,
