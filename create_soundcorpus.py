@@ -94,14 +94,6 @@ class SoundCorpusCreator:
                         end = start + len_wav
                         padded[start:end] = wav
                         wav = padded
-
-                    # wav = self.preprocessing(wav)
-                    """
-                    # This might be helpful to compute mfcc
-                    y, sr = librosa.load(librosa.util.example_audio_file())
-                    S = librosa.feature.melspectrogram(y=y, sr=sr,n_mels=128, fmax=8000)
-                    mfccs = librosa.feature.mfcc(S=librosa.power_to_db(S))                    
-                    """
                     # continue
 
                 # let's generate more silence!
@@ -130,16 +122,7 @@ class SoundCorpusCreator:
             except Exception as err:
                 print(err, label_id, uid, fname)
     
-    def preprocessing(self, wav):
-        wav = self.preemphasis(wav)
-        return wav
-    
 
-    def preemphasis(self, wav):
-        pre_emphasis = 0.97
-        emphasized_signal = np.append(wav[0], wav[1:] - pre_emphasis * wav[:-1])
-        return emphasized_signal
-    
     def build_corpus(self):
         corpus = []
         k = 0
