@@ -13,17 +13,18 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 class Config:
-    soundcorpus_fp = 'assets/corpora/corpus3/trainp.soundcorpus.p'
+    soundcorpus_fp = 'assets/corpora/corpus5/train.pm.soundcorpus.p'
     batch_size = 128
-    size = 16000
+    # size = 16000
     is_training = True
     use_batch_norm = True
     keep_prob = 0.9
     max_gradient = 5
-    learning_rate = 1
+    learning_rate = 0.5
     training_iters = 52200
     display_step = 10
     epochs = 2
+    logs_path = 'models/model2/logs/'
 
 cfg = Config()
 gen = BatchGen(batch_size = cfg.batch_size,soundcorpus_fp = cfg.soundcorpus_fp)
@@ -32,7 +33,7 @@ num_classes=len(decoder)
 
 # Define Graph
 
-size = cfg.size
+# size = cfg.size
 batch_size = cfg.batch_size
 is_training = cfg.is_training
 max_gradient = cfg.max_gradient
@@ -85,73 +86,50 @@ def preprocess(x):
 graph = tf.Graph()
 with graph.as_default():
     # tf Graph input
+    tf.set_random_seed(3)
     with tf.name_scope("Input"):
 
-        x = tf.placeholder(tf.float32, shape=(None, size), name="input")
+        x = tf.placeholder(tf.float32, shape=(batch_size, 99,13,3), name="input")
         # x.set_shape([batch_size, size])
         y = tf.placeholder(tf.int64, shape=(None, ), name="input")
         keep_prob = tf.placeholder(tf.float32, name="dropout")
 
-    x2 = preprocess(x)
-
-    x2 = layers.batch_norm(x2, is_training=is_training)
+    x2 = layers.batch_norm(x, is_training=is_training)
 
 
 
-    # Convlayer1 input dim (128, 98, 257, 2), output dim (128, 98, 257, 16)
+
     x2 = layers.conv2d(x2, 16, 3, 1,
                        activation_fn=tf.nn.elu,
                        normalizer_fn=layers.batch_norm if cfg.use_batch_norm else None,
                        normalizer_params={'is_training': is_training}
                        )
-    # (128, 98, 257, 16) -> (128, 49, 128, 16)
+
     x2 = layers.max_pool2d(x2, 2, 2)
 
-    # Convlay2 (128, 49, 128, 16) -> (128, 49, 128, 32)
+
     x2 = layers.conv2d(x2, 32, 3, 1,
                        activation_fn=tf.nn.elu,
                        normalizer_fn=layers.batch_norm if cfg.use_batch_norm else None,
                        normalizer_params={'is_training': is_training}
                        )
-    # (128, 49, 128, 32) -> (128, 24, 64, 32)
+
     x2 = layers.max_pool2d(x2, 2, 2)
 
-    # Convlay3  (128, 24, 64, 32) -> (128, 24, 64, 64)
-    x2 = layers.conv2d(x2, 64, 3, 1,
-                       activation_fn=tf.nn.elu,
-                       normalizer_fn=layers.batch_norm if cfg.use_batch_norm else None,
-                       normalizer_params={'is_training': is_training}
-                       )
-    # (128, 24, 64, 64) -> (128, 12, 32, 64)
-    x2 = layers.max_pool2d(x2, 2, 2)
 
-    # Convlay4 (128, 12, 32, 64) -> (128, 12, 32, 128)
-    x2 = layers.conv2d(x2, 128, 3, 1,
-                       activation_fn=tf.nn.elu,
-                       normalizer_fn=layers.batch_norm if cfg.use_batch_norm else None,
-                       normalizer_params={'is_training': is_training}
-                       )
-    # (128, 12, 32, 128) -> (128,6,16,128)
-    x2 = layers.max_pool2d(x2, 2, 2)
-
-    ## just take two kind of pooling and then mix them, why not :)
-
-    # (128,6,16,128) -> (128, 1, 1, 128)
     mpool = tf.reduce_max(x2, axis=[1, 2], keep_dims=True)
-
-    # (128,6,16,128) -> (128, 1, 1, 128)
     apool = tf.reduce_mean(x2, axis=[1, 2], keep_dims=True)
 
-    # (128, 1, 1, 128)
+
     x2 = 0.5 * (mpool + apool)
     # we can use conv2d 1x1 instead of dense
 
-    # (128, 1, 1, 128) -> (128, 1, 1, 128)
-    x2 = layers.conv2d(x2, 128, 1, 1, activation_fn=tf.nn.elu)
+    # (128, 1, 1, 32) -> (128, 1, 1, 32)
+    x2 = layers.conv2d(x2, 32, 1, 1, activation_fn=tf.nn.elu)
     x2 = tf.nn.dropout(x2, keep_prob=keep_prob)
 
     # again conv2d 1x1 instead of dense layer
-    # (128, 1, 1, 128) -> (128, 1, 1, 12)
+    # (128, 1, 1, 32) -> (128, 1, 1, 12)
     # x2 = layers.conv2d(x2, num_classes, 1, 1, activation_fn=None)
     x2 = layers.fully_connected(x2,num_classes,activation_fn=tf.nn.relu)
 
@@ -179,16 +157,13 @@ with graph.as_default():
     correct_pred = tf.equal(pred, tf.reshape(y, [-1]))
     accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
-    #pred = tf.argmax(logits2, axis=-1)
-    #accuracy, acc_op = tf.metrics.mean_per_class_accuracy(y, pred, num_classes)
+    saver = tf.train.Saver()
+
 
 # Launch the graph
 # TESTING
 
 
-def _global_avg_pool(self, x):
-    assert x.get_shape().ndims == 4
-    return tf.reduce_mean(x, [1, 2])
 
 def debug_model():
     with tf.Session(graph=graph) as sess:
@@ -229,13 +204,32 @@ def train_model():
                     l, acc= sess.run([loss, accuracy], feed_dict={x: batch_x, y: batch_y, keep_prob: cfg.keep_prob})
 
                     print(l, acc)
-
-
                 step += 1
+            print('saving model...', end='')
+            model_name = 'model_%s_bsize%s_e%s.ckpt' % ('mfcc',batch_size,epoch)
+
+            s_path = saver.save(sess, cfg.logs_path + model_name)
+            print("Model saved in file: %s" % s_path)
+
 
         print("Optimization Finished!")
 
+def predict(batch_x):
+    fn_model = 'models/model2/logs/model_mfcc_bsize128_e1.ckpt'
+    # %%
+    with tf.Session(graph=graph) as sess:
+        # Restore variables from disk.
+        saver.restore(sess, fn_model)
+        print("Model restored.")
+
+        prediction = sess.run([pred], feed_dict={x: batch_x, keep_prob: 1.0})
+
+
+
+
+
+
 if __name__ == '__main__':
-    # l, acc = debug_model()
+    #l, acc = debug_model()
     train_model()
 

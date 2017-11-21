@@ -5,16 +5,17 @@ import numpy as np
 from scipy.io import wavfile
 import logging
 import pickle
+from python_speech_features import mfcc, logfbank, delta
 
 logging.basicConfig(level=logging.DEBUG)
 
 class SC_Config:
     def __init__(self, mode='train'):
         self.padding = True
-        self.mfcc = False
+        self.mfcc = True
         self.mode = mode
         self.data_dir = 'assets/'
-        self.save_dir = self.data_dir + 'corpora/corpus3/'
+        self.save_dir = self.data_dir + 'corpora/corpus5/'
 
 POSSIBLE_LABELS = 'yes no up down left right on off stop go silence unknown'.split()
 id2name = {i: name for i, name in enumerate(POSSIBLE_LABELS)}
@@ -110,9 +111,20 @@ class SoundCorpusCreator:
                         beg = np.random.randint(0, len(wav) - L)
                     else:
                         beg = 0
+
+                    signal = wav[beg: beg + L]
+                    if self.config.mfcc:
+                        signal = mfcc(signal, samplerate=16000, winlen=0.025, winstep=0.01, numcep=13,
+                             nfilt=26, nfft=512, lowfreq=0, highfreq=None, preemph=0.97,
+                             ceplifter=22, appendEnergy=True)
+                        dsignal = delta(signal,N=1)
+                        ddsignal = delta(dsignal, N=1)
+                        signal = np.stack([signal,dsignal,ddsignal], axis = 2)
+
+
                     yield dict(
                         target=np.int32(label_id),
-                        wav=wav[beg: beg + L],
+                        wav=signal,
                     )
 
             except Exception as err:
