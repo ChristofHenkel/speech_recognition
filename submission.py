@@ -1,30 +1,10 @@
 from tqdm import tqdm
 import numpy as np
 from glob import glob
+import os
 # now we want to predict!
-paths = glob(os.path.join(DATADIR, 'test/audio/*wav'))
 
-def test_data_generator(data):
-    def generator():
-        for path in data:
-            _, wav = wavfile.read(path)
-            wav = wav.astype(np.float32) / np.iinfo(np.int16).max
-            fname = os.path.basename(path)
-            yield dict(
-                sample=np.string_(fname),
-                wav=wav,
-            )
 
-    return generator
-
-test_input_fn = generator_input_fn(
-    x=test_data_generator(paths),
-    batch_size=hparams.batch_size,
-    shuffle=False, 
-    num_epochs=1,
-    queue_capacity= 10 * hparams.batch_size,
-    num_threads=1,
-)
 
 model = create_model(config=run_config, hparams=hparams)
 it = model.predict(input_fn=test_input_fn)

@@ -9,26 +9,30 @@ from tensorflow.contrib import layers, signal
 import numpy as np
 import time
 import logging
-
+import pickle
+import os
 logging.basicConfig(level=logging.DEBUG)
 
 class Config:
-    soundcorpus_fp = 'assets/corpora/corpus5/train.pm.soundcorpus.p'
-    batch_size = 128
+    soundcorpus_fp = 'assets/corpora/corpus7/train.pm.soundcorpus.p'
+    batch_size = 6
     # size = 16000
     is_training = True
     use_batch_norm = True
-    keep_prob = 0.9
+    keep_prob = 0.8
     max_gradient = 5
     learning_rate = 0.5
     training_iters = 52200
     display_step = 10
-    epochs = 2
-    logs_path = 'models/model2/logs/'
+    epochs = 10
+    logs_path = 'models/model4/logs/'
 
 cfg = Config()
 gen = BatchGen(batch_size = cfg.batch_size,soundcorpus_fp = cfg.soundcorpus_fp)
-decoder = gen.decoder
+
+with open('assets/corpora/corpus7/infos.p','rb') as f:
+        infos = pickle.load(f)
+decoder = infos['id2name']
 num_classes=len(decoder)
 
 # Define Graph
@@ -60,7 +64,7 @@ with graph.as_default():
     tf.set_random_seed(3)
     with tf.name_scope("Input"):
 
-        x = tf.placeholder(tf.float32, shape=(batch_size, 99,13,3), name="input")
+        x = tf.placeholder(tf.float32, shape=(None, 99,13,3), name="input")
         # x.set_shape([batch_size, size])
         y = tf.placeholder(tf.int64, shape=(None, ), name="input")
         keep_prob = tf.placeholder(tf.float32, name="dropout")
@@ -161,9 +165,10 @@ def train_model():
 
             # Keep training until reach max iterations
             current_time = time.time()
-            while step * batch_size < cfg.training_iters:
-                logging.info('step ' + str(step))
-                batch_x, batch_y = next(gen.batch_gen())
+            #while step * batch_size < cfg.training_iters:
+            for (batch_x,batch_y) in gen.batch_gen():
+                logging.info('epoch ' + str(epoch) + ' - step ' + str(step))
+                #batch_x, batch_y = next(gen.batch_gen())
 
                 # Run optimization op (backprop)
                 sess.run(optimizer, feed_dict={x: batch_x, y: batch_y, keep_prob: cfg.keep_prob})
@@ -176,16 +181,17 @@ def train_model():
 
                     print(l, acc)
                 step += 1
-            print('saving model...', end='')
-            model_name = 'model_%s_bsize%s_e%s.ckpt' % ('mfcc',batch_size,epoch)
+                if step == 233:
+                    print('saving model...', end='')
+                    model_name = 'model_%s_bsize%s_e%s.ckpt' % ('mfcc',batch_size,epoch)
 
-            s_path = saver.save(sess, cfg.logs_path + model_name)
-            print("Model saved in file: %s" % s_path)
-
+                    s_path = saver.save(sess, cfg.logs_path + model_name)
+                    print("Model saved in file: %s" % s_path)
+                    break
 
         print("Optimization Finished!")
 
-def predict(batch_x):
+def predict_one_batch(batch_x):
     fn_model = 'models/model2/logs/model_mfcc_bsize128_e1.ckpt'
     # %%
     with tf.Session(graph=graph) as sess:
@@ -195,8 +201,38 @@ def predict(batch_x):
 
         prediction = sess.run([pred], feed_dict={x: batch_x, keep_prob: 1.0})
 
+def submission():
+    fn_model = 'models/model4/logs/model_mfcc_bsize256_e9.ckpt'
+    # %%
+    with open('assets/corpora/corpus7/infos.p','rb') as f:
+        content = pickle.load(f)
+    id2name = content['id2name']
+    cfg = Config()
+    cfg.is_training = False
+    cfg.soundcorpus_fp = 'assets/corpora/corpus7/test.pm.soundcorpus.p'
+    gen_test = BatchGen(batch_size = cfg.batch_size,soundcorpus_fp = cfg.soundcorpus_fp, mode = 'test')
+    size = 158538
+
+    with tf.Session(graph=graph) as sess:
+        # Restore variables from disk.
+        saver.restore(sess, fn_model)
+        print("Model restored.")
+        submission = dict()
+        k_batch = 0
+        for (batch_x, batch_y) in gen_test.batch_gen():
+            if k_batch % 100 == 0:
+                logging.info(str(k_batch))
+            prediction = sess.run([pred], feed_dict={x: batch_x, keep_prob: 1.0})
+            for k,p in enumerate(prediction[0]):
+                fname, label = batch_y[k].decode(), id2name[p]
+                submission[fname] = label
+            k_batch += 1
 
 
+        with open(os.path.join('assets/corpora/corpus7/', 'submission.csv'), 'w') as fout:
+            fout.write('fname,label\n')
+            for fname, label in submission.items():
+                fout.write('{},{}\n'.format(fname, label))
 
 
 
