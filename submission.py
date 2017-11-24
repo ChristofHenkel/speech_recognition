@@ -2,19 +2,21 @@ import tensorflow as tf
 import numpy as np
 from glob import glob
 from batch_gen import SoundCorpus
-from architectures import Model1
+from architectures import Model2 as Model
 import os
 import pickle
 import logging
+
+logging.basicConfig(level=logging.INFO)
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus7/'
     batch_size = 6
     is_training = False
-    use_batch_norm = True
-    keep_prob = 0.8
+    use_batch_norm = False
+    keep_prob = 1
     max_gradient = 5
-    learning_rate = 0.5
+    learning_rate = 1
     display_step = 10
     epochs = 10
     logs_path = 'models/model5/logs/'
@@ -28,7 +30,7 @@ batch_gen = corpus.batch_gen(cfg.batch_size)
 decoder = corpus.decoder
 num_classes=len(decoder)
 
-
+model = Model(cfg)
 # set_graph Graph
 
 batch_size = cfg.batch_size
@@ -49,7 +51,7 @@ with graph.as_default():
 
 
     with tf.variable_scope('logit'):
-        logits = Model1.calc_logits(x, keep_prob, is_training, cfg.use_batch_norm, num_classes)
+        logits = model.calc_logits(x, keep_prob, num_classes)
         predictions = tf.nn.softmax(logits)
 
     with tf.variable_scope('costs'):
@@ -70,10 +72,10 @@ with graph.as_default():
     saver = tf.train.Saver()
 
 def submission():
-    fn_model = 'models/model6/logs/model_mfcc_bsize256_e0.ckpt'
+    fn_model = 'models/model6/logs4/model_mfcc_bsize256_e4.ckpt'
     # %%
     id2name = corpus.decoder
-    cfg = Config()
+    #cfg = Config()
     # cfg.soundcorpus_fp = 'assets/corpora/corpus7/test.pm.soundcorpus.p'
     size = 158538
 
@@ -83,17 +85,25 @@ def submission():
         print("Model restored.")
         submission = dict()
         k_batch = 0
-        for (batch_x, batch_y) in batch_gen:
-            if k_batch % 100 == 0:
-                logging.info(str(k_batch))
-            prediction = sess.run([pred], feed_dict={x: batch_x, keep_prob: 1.0})
-            for k,p in enumerate(prediction[0]):
-                fname, label = batch_y[k].decode(), id2name[p]
-                submission[fname] = label
-            k_batch += 1
+        try:
+            for (batch_x, batch_y) in batch_gen:
+                if k_batch % 100 == 0:
+                    print('------')
+                    logging.info(str(k_batch))
+                prediction = sess.run([pred], feed_dict={x: batch_x, keep_prob: 1.0})
+                for k,p in enumerate(prediction[0]):
+                    fname, label = batch_y[k].decode(), id2name[p]
+                    submission[fname] = label
+                k_batch += 1
+        except EOFError:
+            pass
 
-
-        with open(os.path.join('assets/corpora/corpus7/', 'submission_test.csv'), 'w') as fout:
+        with open(os.path.join('assets/corpora/corpus7/', 'submission_test3.csv'), 'w') as fout:
             fout.write('fname,label\n')
             for fname, label in submission.items():
                 fout.write('{},{}\n'.format(fname, label))
+
+if __name__ == '__main__':
+
+
+    submission()

@@ -6,6 +6,7 @@ from scipy.io import wavfile
 import logging
 import pickle
 from python_speech_features import mfcc, logfbank, delta
+from pydub import AudioSegment
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -187,6 +188,10 @@ class SoundCorpusCreator:
                 pickler.dump(e)
         return len(corpus)
 
+    @staticmethod
+    def change_volume(wav,factor):
+        wav = wav / factor
+        return wav
 
 if __name__ == '__main__':
 

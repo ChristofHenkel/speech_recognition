@@ -11,7 +11,7 @@ import time
 import logging
 import pickle
 import os
-from architectures import Model2 as Model1
+from architectures import Model2 as Model
 logging.basicConfig(level=logging.DEBUG)
 
 
@@ -25,7 +25,7 @@ class Config:
     learning_rate = 1
     display_step = 10
     epochs = 5
-    logs_path = 'models/model6/logs3/'
+    logs_path = 'models/model6/logs4/'
 
 cfg = Config()
 
@@ -44,14 +44,13 @@ max_gradient = cfg.max_gradient
 
 training_iters = corpus.len
 
-
+cnn_model = Model(cfg)
 graph = tf.Graph()
 with graph.as_default():
     # tf Graph input
     tf.set_random_seed(3)
     with tf.name_scope("Input"):
         x = tf.placeholder(tf.float32, shape=(None, 99, 13, 3), name="input")
-        # x.set_shape([batch_size, size])
         y = tf.placeholder(tf.int64, shape=(None,), name="input")
         keep_prob = tf.placeholder(tf.float32, name="dropout")
 
@@ -60,7 +59,7 @@ with graph.as_default():
     # (128, 12) -> (1)
     # loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=logits))
     with tf.variable_scope('logit'):
-        logits = Model1.calc_logits(x,keep_prob,is_training,cfg.use_batch_norm,num_classes)
+        logits = cnn_model.calc_logits(x,keep_prob,num_classes)
         predictions = tf.nn.softmax(logits)
 
     with tf.variable_scope('costs'):
@@ -153,13 +152,37 @@ def train_model():
             print("Model saved in file: %s" % s_path)
 
             val_batch_x, val_batch_y = next(val_batch_gen)
-            c, acc = sess.run([cost, accuracy], feed_dict={x: val_batch_x, y: val_batch_y, keep_prob: 1})
+            c_val, acc_val = sess.run([cost, accuracy], feed_dict={x: val_batch_x, y: val_batch_y, keep_prob: 1})
 
-            print(c, acc)
+            print(c_val, acc_val)
 
         print("Optimization Finished!")
 
+def predict():
+    fn_model = 'models/model6/logs4/model_mfcc_bsize256_e4.ckpt'
+    # %%
+    id2name = corpus.decoder
 
+    batch_gen = corpus.batch_gen(6)
+    with tf.Session(graph=graph) as sess:
+        # Restore variables from disk.
+        saver.restore(sess, fn_model)
+        print("Model restored.")
+        predictions = []
+        k_batch = 0
+        try:
+            for (batch_x, batch_y) in batch_gen:
+                if k_batch % 100 == 0:
+                    print('------')
+                    logging.info(str(k_batch))
+                prediction = sess.run([pred], feed_dict={x: batch_x, keep_prob: 1.0})
+                print(prediction)
+                for k,p in enumerate(prediction[0]):
+                    label_true, label = id2name[batch_y[k]], id2name[p]
+                    predictions.append([label_true,label])
+                k_batch += 1
+        except EOFError:
+            pass
 
 if __name__ == '__main__':
     #l, acc = debug_model()

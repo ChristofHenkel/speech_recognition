@@ -51,41 +51,49 @@ class Model1:
         logits = tf.squeeze(x2, [1, 2])
         return logits
 
+
 class Model2:
 
     def __init__(self, cfg):
         self.test = ''
         self.config = cfg
+        self.hparams = {'use_batch_norm':True,
+                        'is_training':True}
+
+    def calc_logits(self,x,keep_prob,num_classes):
 
 
+        x2 = layers.batch_norm(x, is_training=self.hparams['is_training'])
 
-    @staticmethod
-    def calc_logits(x,keep_prob,is_training,use_batch_norm,num_classes):
+        x2 = layers.conv2d(x2, 8, 3, 1,
+                           activation_fn=tf.nn.elu,
+                           normalizer_fn=layers.batch_norm if self.hparams['use_batch_norm'] else None,
+                           normalizer_params={'is_training': self.hparams['is_training']}
+                           )
 
-
-        x2 = layers.batch_norm(x, is_training=is_training)
+        x2 = layers.avg_pool2d(x2, 2, 2)
 
         x2 = layers.conv2d(x2, 16, 3, 1,
                            activation_fn=tf.nn.elu,
-                           normalizer_fn=layers.batch_norm if use_batch_norm else None,
-                           normalizer_params={'is_training': is_training}
+                           normalizer_fn=layers.batch_norm if self.hparams['use_batch_norm'] else None,
+                           normalizer_params={'is_training': self.hparams['is_training']}
                            )
 
         x2 = layers.avg_pool2d(x2, 2, 2)
 
         x2 = layers.conv2d(x2, 32, 3, 1,
                            activation_fn=tf.nn.elu,
-                           normalizer_fn=layers.batch_norm if use_batch_norm else None,
-                           normalizer_params={'is_training': is_training}
+                           normalizer_fn=layers.batch_norm if self.hparams['use_batch_norm'] else None,
+                           normalizer_params={'is_training': self.hparams['is_training']}
                            )
 
         x2 = layers.avg_pool2d(x2, 2, 2)
 
-        m_a = [0.7,0.3]
+        portion_m = 0.7
         mpool = tf.reduce_max(x2, axis=[1, 2], keep_dims=True)
         apool = tf.reduce_mean(x2, axis=[1, 2], keep_dims=True)
 
-        x2 = 0.5 * (mpool + apool)
+        x2 = portion_m * mpool + (1-portion_m) * apool
         # we can use conv2d 1x1 instead of dense
 
         # (128, 1, 1, 32) -> (128, 1, 1, 32)
