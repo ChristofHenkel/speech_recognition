@@ -11,26 +11,26 @@ import time
 import logging
 import pickle
 import os
-from architectures import Model1
+from architectures import Model2 as Model1
 logging.basicConfig(level=logging.DEBUG)
 
 
 class Config:
-    soundcorpus_fp = 'assets/corpora/corpus7/train.pm.soundcorpus.p'
+    soundcorpus_dir = 'assets/corpora/corpus7/'
     batch_size = 256
     is_training = True
     use_batch_norm = True
-    keep_prob = 0.8
+    keep_prob = 0.7
     max_gradient = 5
-    learning_rate = 0.5
+    learning_rate = 1
     display_step = 10
     epochs = 5
-    logs_path = 'models/model6/logs/'
+    logs_path = 'models/model6/logs3/'
 
 cfg = Config()
 
-corpus = SoundCorpus('assets/corpora/corpus7/',mode='train')
-
+corpus = SoundCorpus(cfg.soundcorpus_dir,mode='train')
+valid_corpus = SoundCorpus(cfg.soundcorpus_dir, mode = 'valid')
 
 
 decoder = corpus.decoder
@@ -120,6 +120,7 @@ def train_model():
         train_writer = tf.summary.FileWriter(cfg.logs_path, graph=graph)
         sess.run(init)
         global_step = 0
+        val_batch_gen = valid_corpus.batch_gen(1000)
         for epoch in range(cfg.epochs):
             step = 1
 
@@ -151,6 +152,10 @@ def train_model():
             s_path = saver.save(sess, cfg.logs_path + model_name)
             print("Model saved in file: %s" % s_path)
 
+            val_batch_x, val_batch_y = next(val_batch_gen)
+            c, acc = sess.run([cost, accuracy], feed_dict={x: val_batch_x, y: val_batch_y, keep_prob: 1})
+
+            print(c, acc)
 
         print("Optimization Finished!")
 
