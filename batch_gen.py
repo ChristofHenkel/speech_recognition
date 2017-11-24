@@ -3,18 +3,26 @@ import pickle
 import numpy as np
 
 
-class BatchGen:
+class SoundCorpus:
 
-    def __init__(self, batch_size, soundcorpus_fp, mode = 'train'):
-        self.bsize = batch_size
-        self.fp = soundcorpus_fp
-        #with open('assets/corpora/corpus1/nameiddict.p','rb') as f:
-        #    dec, enc = pickle.load(f)
-        #self.decoder = dec
-        #self.encoder = enc
+    def __init__(self, soundcorpus_dir, mode = 'train'):
         self.mode = mode
+        self.fp = soundcorpus_dir + [fn for fn in os.listdir(soundcorpus_dir) if fn.startswith(self.mode)][0]
+        self.info_dict_fp = soundcorpus_dir + 'infos.p'
+        self.decoder = None
+        self.encoder = None
+        self.len = None
+        self._load_info_dict()
 
-    def batch_gen(self):
+
+    def _load_info_dict(self):
+        with open(self.info_dict_fp,'rb') as f:
+            content = pickle.load(f)
+            self.decoder = content['id2name']
+            self.encoder = content['name2id']
+            self.len = content['len_' + self.mode]
+
+    def batch_gen(self,batch_size):
         x = []
         y = []
         with open(self.fp, 'rb') as file:
@@ -38,7 +46,7 @@ class BatchGen:
                     y.append(item['sample'])
                 else:
                     pass
-                if len(x) == self.bsize:
+                if len(x) == batch_size:
                     # reshape to np arrays
                     x = np.asarray(x)
                     if not self.mode in ['test']:
