@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class Config:
-    soundcorpus_dir = 'assets/corpora/corpus7/'
+    soundcorpus_dir = 'assets/corpora/corpus9/'
     batch_size = 256
     is_training = True
     use_batch_norm = True
@@ -25,7 +25,7 @@ class Config:
     learning_rate = 1
     display_step = 10
     epochs = 5
-    logs_path = 'models/model6/logs4/'
+    logs_path = 'models/model7/logs/'
 
 cfg = Config()
 
@@ -75,8 +75,13 @@ with graph.as_default():
         correct_prediction = tf.equal(pred, tf.reshape(y, [-1]))
         accuracy = tf.reduce_mean(
             tf.cast(correct_prediction, tf.float32), name='accu')
-
+        confusion_matrix = tf.confusion_matrix(tf.reshape(y, [-1]),pred,num_classes)
         tf.summary.scalar('accuracy', accuracy)
+    with tf.variable_scope('acc_per_class'):
+        for i in range(num_classes):
+            acc_id = confusion_matrix[i,i]/tf.reduce_sum(confusion_matrix[:,i])
+            tf.summary.scalar('accuracy_' + corpus.decoder[i], acc_id)
+
 
     # train ops
     gradients, _ = tf.clip_by_global_norm(tf.gradients(cost, tf.trainable_variables()),
@@ -105,10 +110,12 @@ def debug_model():
     with tf.Session(graph=graph) as sess:
         init = tf.global_variables_initializer()
         sess.run(init)
+        batch_gen = corpus.batch_gen(cfg.batch_size)
         batch_x, batch_y = next(batch_gen)
-        l, acc = sess.run([logits,accuracy], feed_dict={x: batch_x, y: batch_y, keep_prob: cfg.keep_prob})
+        cm,l, acc, pred_,y_, id1_ = sess.run([confusion_matrix,logits,accuracy,pred,y,id1], feed_dict={x: batch_x, y: batch_y, keep_prob: cfg.keep_prob})
+        print(cm)
         print(l, acc)
-        return l, acc
+        return cm, l, acc,pred_,y_, id1_
 
 
 
@@ -119,7 +126,7 @@ def train_model():
         train_writer = tf.summary.FileWriter(cfg.logs_path, graph=graph)
         sess.run(init)
         global_step = 0
-        val_batch_gen = valid_corpus.batch_gen(1000)
+
         for epoch in range(cfg.epochs):
             step = 1
 
@@ -140,9 +147,10 @@ def train_model():
 
                     logging.info('runtime for batch of ' + str(cfg.batch_size * cfg.display_step) + ' ' + str(time.time()-current_time))
                     current_time = time.time()
-                    c, acc= sess.run([cost, accuracy], feed_dict={x: batch_x, y: batch_y, keep_prob: cfg.keep_prob})
+                    c, acc, cm= sess.run([cost, accuracy,confusion_matrix], feed_dict={x: batch_x, y: batch_y, keep_prob: cfg.keep_prob})
 
                     print(c, acc)
+                    print(cm)
                 step += 1
                 global_step += 1
             print('saving model...', end='')
@@ -150,7 +158,7 @@ def train_model():
 
             s_path = saver.save(sess, cfg.logs_path + model_name)
             print("Model saved in file: %s" % s_path)
-
+            val_batch_gen = valid_corpus.batch_gen(2000)
             val_batch_x, val_batch_y = next(val_batch_gen)
             c_val, acc_val = sess.run([cost, accuracy], feed_dict={x: val_batch_x, y: val_batch_y, keep_prob: 1})
 
@@ -185,6 +193,6 @@ def predict():
             pass
 
 if __name__ == '__main__':
-    #l, acc = debug_model()
+    #cm, l, acc, pred_,y_, id1_ = debug_model()
     train_model()
 

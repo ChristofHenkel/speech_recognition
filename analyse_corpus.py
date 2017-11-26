@@ -1,5 +1,5 @@
 import pickle
-from collections import Counter
+import logging
 
 class CorpusGen:
 
@@ -18,18 +18,28 @@ class CorpusGen:
                 except:
                     break
 
-corpus = CorpusGen('assets/corpora/corpus7/train.pm.soundcorpus.p')
-counter = Counter()
 
-data = []
-for item in corpus.gen():
-    data.append(item)
+class Analyzer:
 
-labels = [d['target'] for d in data]
-all_labels = list(set(labels))
-count_dict = {}
-for item in all_labels:
-    count_dict[item] = labels.count(item)
-print(count_dict)
+    def __init__(self, corpus_gen):
+        self.gen = corpus_gen()
+        self.data = None
 
-# analyse training in classification per label
+    def get_all_data(self):
+        content = []
+        for item in self.gen:
+            content.append(item)
+        self.data = content
+
+    def get_label_distribution(self, data):
+        labels = [d['target'] for d in data]
+        all_labels = list(set(labels))
+        count_dict = {}
+        for item in all_labels:
+            count_dict[item] = labels.count(item)
+        return count_dict
+
+
+corpus_gen = CorpusGen('assets/corpora/corpus7/train.pm.soundcorpus.p')
+analyzer = Analyzer(corpus_gen)
+analyzer.get_label_distribution()

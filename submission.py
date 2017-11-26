@@ -10,7 +10,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 class Config:
-    soundcorpus_dir = 'assets/corpora/corpus7/'
+    soundcorpus_dir = 'assets/corpora/corpus9/'
     batch_size = 6
     is_training = False
     use_batch_norm = False
@@ -20,6 +20,7 @@ class Config:
     display_step = 10
     epochs = 10
     logs_path = 'models/model5/logs/'
+
 
 cfg = Config()
 
@@ -72,7 +73,7 @@ with graph.as_default():
     saver = tf.train.Saver()
 
 def submission():
-    fn_model = 'models/model6/logs4/model_mfcc_bsize256_e4.ckpt'
+    fn_model = 'models/model7/logs/model_mfcc_bsize256_e4.ckpt'
     # %%
     id2name = corpus.decoder
     #cfg = Config()
@@ -87,8 +88,7 @@ def submission():
         k_batch = 0
         try:
             for (batch_x, batch_y) in batch_gen:
-                if k_batch % 100 == 0:
-                    print('------')
+                if k_batch % 1000 == 0:
                     logging.info(str(k_batch))
                 prediction = sess.run([pred], feed_dict={x: batch_x, keep_prob: 1.0})
                 for k,p in enumerate(prediction[0]):
@@ -98,7 +98,7 @@ def submission():
         except EOFError:
             pass
 
-        with open(os.path.join('assets/corpora/corpus7/', 'submission_test3.csv'), 'w') as fout:
+        with open(os.path.join('assets/corpora/corpus8/', 'submission1.csv'), 'w') as fout:
             fout.write('fname,label\n')
             for fname, label in submission.items():
                 fout.write('{},{}\n'.format(fname, label))
