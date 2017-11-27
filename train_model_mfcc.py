@@ -3,7 +3,7 @@
 http://haythamfayek.com/2016/04/21/speech-processing-for-machine-learning.html
 """
 
-from batch_gen import SoundCorpus
+from batch_gen import SoundCorpus, AdvancedBatchGen
 import tensorflow as tf
 from tensorflow.contrib import layers
 import numpy as np
@@ -16,21 +16,27 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class Config:
-    soundcorpus_dir = 'assets/corpora/corpus9/'
+    soundcorpus_dir = 'assets/corpora/corpus10/'
     batch_size = 256
     is_training = True
     use_batch_norm = True
-    keep_prob = 0.7
+    keep_prob = 0.5
     max_gradient = 5
-    learning_rate = 1
+    learning_rate = 0.5
     display_step = 10
-    epochs = 5
-    logs_path = 'models/model7/logs/'
+    epochs = 10
+    logs_path = 'models/model7/logs5/'
 
 cfg = Config()
 
 corpus = SoundCorpus(cfg.soundcorpus_dir,mode='train')
 valid_corpus = SoundCorpus(cfg.soundcorpus_dir, mode = 'valid')
+
+bg_corpus = SoundCorpus('assets/corpora/corpus10/',mode='train', fn = 'only_background.p.soundcorpus.p')
+advanced_gen = AdvancedBatchGen(corpus,bg_corpus, cfg.batch_size)
+
+
+
 
 
 decoder = corpus.decoder
@@ -80,7 +86,7 @@ with graph.as_default():
     with tf.variable_scope('acc_per_class'):
         for i in range(num_classes):
             acc_id = confusion_matrix[i,i]/tf.reduce_sum(confusion_matrix[:,i])
-            tf.summary.scalar('accuracy_' + corpus.decoder[i], acc_id)
+            tf.summary.scalar(corpus.decoder[i], acc_id)
 
 
     # train ops
@@ -132,7 +138,7 @@ def train_model():
 
             # Keep training until reach max iterations
             current_time = time.time()
-            batch_gen = corpus.batch_gen(cfg.batch_size)
+            batch_gen = advanced_gen.batch_gen()
             while step * batch_size < training_iters:
                 #for (batch_x,batch_y) in batch_gen:
                 batch_x, batch_y = next(batch_gen)
@@ -158,11 +164,11 @@ def train_model():
 
             s_path = saver.save(sess, cfg.logs_path + model_name)
             print("Model saved in file: %s" % s_path)
-            val_batch_gen = valid_corpus.batch_gen(2000)
-            val_batch_x, val_batch_y = next(val_batch_gen)
-            c_val, acc_val = sess.run([cost, accuracy], feed_dict={x: val_batch_x, y: val_batch_y, keep_prob: 1})
+            #val_batch_gen = valid_corpus.batch_gen(2000)
+            #val_batch_x, val_batch_y = next(val_batch_gen)
+            #c_val, acc_val = sess.run([cost, accuracy], feed_dict={x: val_batch_x, y: val_batch_y, keep_prob: 1})
 
-            print(c_val, acc_val)
+            #print(c_val, acc_val)
 
         print("Optimization Finished!")
 

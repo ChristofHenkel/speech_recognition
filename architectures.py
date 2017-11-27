@@ -99,7 +99,7 @@ class Model2:
         # (128, 1, 1, 32) -> (128, 1, 1, 32)
         x2 = layers.conv2d(x2, 32, 1, 1, activation_fn=tf.nn.elu)
         x2 = tf.nn.dropout(x2, keep_prob=keep_prob)
-
+        x2 = layers.fully_connected(x2, 16, activation_fn=tf.nn.relu)
         # again conv2d 1x1 instead of dense layer
         # (128, 1, 1, 32) -> (128, 1, 1, 12)
         # x2 = layers.conv2d(x2, num_classes, 1, 1, activation_fn=None)

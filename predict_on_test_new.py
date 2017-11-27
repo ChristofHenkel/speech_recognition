@@ -1,3 +1,4 @@
+from create_soundcorpus import SC_Config, SoundCorpusCreator
 import tensorflow as tf
 import numpy as np
 from glob import glob
@@ -11,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus9/'
-    batch_size = 6
+    batch_size = 249
     is_training = False
     use_batch_norm = False
     keep_prob = 1
@@ -21,9 +22,9 @@ class Config:
 
 cfg = Config()
 
-corpus = SoundCorpus(cfg.soundcorpus_dir,mode='test')
+corpus = SoundCorpus(cfg.soundcorpus_dir,mode='train',fn='new_test_train.pm.soundcorpus.p')
 
-batch_gen = corpus.batch_gen(cfg.batch_size)
+batch_gen = corpus.batch_gen(249)
 
 decoder = corpus.decoder
 num_classes=len(decoder)
@@ -34,8 +35,6 @@ model = Model(cfg)
 batch_size = cfg.batch_size
 is_training = cfg.is_training
 
-
-training_iters = corpus.len
 
 graph = tf.Graph()
 with graph.as_default():
@@ -65,17 +64,15 @@ with graph.as_default():
         correct_prediction = tf.equal(pred, tf.reshape(y, [-1]))
         accuracy = tf.reduce_mean(
             tf.cast(correct_prediction, tf.float32), name='accu')
+        confusion_matrix = tf.confusion_matrix(tf.reshape(y, [-1]),pred,num_classes)
 
         tf.summary.scalar('accuracy', accuracy)
     saver = tf.train.Saver()
 
-def submission():
-    fn_model = 'models/model7/logs/model_mfcc_bsize256_e4.ckpt'
+def predict():
+    fn_model = 'models/model7/logs5/model_mfcc_bsize256_e9.ckpt'
     # %%
     id2name = corpus.decoder
-    #cfg = Config()
-    # cfg.soundcorpus_fp = 'assets/corpora/corpus7/test.pm.soundcorpus.p'
-    size = 158538
 
     with tf.Session(graph=graph) as sess:
         # Restore variables from disk.
@@ -87,20 +84,34 @@ def submission():
             for (batch_x, batch_y) in batch_gen:
                 if k_batch % 1000 == 0:
                     logging.info(str(k_batch))
-                prediction = sess.run([pred], feed_dict={x: batch_x, keep_prob: 1.0})
-                for k,p in enumerate(prediction[0]):
-                    fname, label = batch_y[k].decode(), id2name[p]
-                    submission[fname] = label
+                prediction, cm, acc = sess.run([pred,confusion_matrix, accuracy], feed_dict={x: batch_x, y:batch_y, keep_prob: 1.0})
+                #for k,p in enumerate(prediction[0]):
+                    #print(p)
+
+                print(cm)
+                print('Acc',acc)
                 k_batch += 1
         except EOFError:
             pass
-
-        with open(os.path.join('assets/corpora/corpus8/', 'submission1.csv'), 'w') as fout:
-            fout.write('fname,label\n')
-            for fname, label in submission.items():
-                fout.write('{},{}\n'.format(fname, label))
-
-if __name__ == '__main__':
+    return prediction, cm, acc
 
 
-    submission()
+def build_new_test_corpus():
+    sc_cfg = SC_Config()
+    sc_cfg.dir_files = 'new_test/label/*/*wav'
+    sc_cfg.unknown_portion = 1
+    test_corpus = SoundCorpusCreator(sc_cfg)
+    sc_cfg.save_dir += 'new_test_'
+    test_corpus.build_corpus('train')
+
+#if __name__ == '__main__':
+
+prediction, cm, acc = predict()
+
+acc_dict = {}
+for c in range(num_classes):
+    acc_id = cm[c,c]/sum(cm[:,c])
+    acc_dict[decoder[c]] = acc_id
+
+
+print(sum([cm[i,i] for i in range(num_classes-1)])/sum(sum(cm[:-1,:-1])))

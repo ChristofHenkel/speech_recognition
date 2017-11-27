@@ -13,21 +13,22 @@ logging.basicConfig(level=logging.DEBUG)
 class SC_Config:
     def __init__(self, mode='train'):
         self.padding = True
-        self.mfcc = True
-        self.pure_silence_portion = 0.05 # How  much of the resulting data should be pure silence.
-        self.background_silence_portion = 0.05 # How  much of the resulting data should be silence from background.
+        self.mfcc = False
+        self.pure_silence_portion = 0.1 # How  much of the resulting data should be pure silence.
+        self.background_silence_portion = 0 # How  much of the resulting data should be silence from background.
         self.unknown_portion = 0.1 # How much should be audio outside the wanted classes.
         self.possible_labels = 'yes no up down left right on off stop go silence unknown'.split()
         self.id2name = {i: name for i, name in enumerate(self.possible_labels)}
         self.name2id = {name: i for i, name in self.id2name.items()}
         self.mode = mode
-        self.modes = ['train','valid','test']
+        self.modes = ['train','valid','test','only_background','only_unknown']
         self.data_root = 'assets/'
         self.dir_files = 'train/audio/*/*wav'
         self.validation_list_fp = 'train/validation_list.txt'
-        self.save_dir = self.data_root + 'corpora/corpus9/'
+        self.save_dir = self.data_root + 'corpora/corpus10/'
         self.seed = np.random.seed(1)
         self.paths_test = glob(os.path.join('assets', 'test/audio/*wav'))
+        self.dir_background_noise = 'assets/data_augmentation/silence/background/'
         self.L = 16000 # length of files
 
 
@@ -67,6 +68,40 @@ class SoundCorpusCreator:
     #        logging.warning('wrong mode')
     #    self.size = len(self.data)
 
+    def _do_mfcc(self,signal):
+        signal = mfcc(signal, samplerate=16000, winlen=0.025, winstep=0.01, numcep=13,
+                      nfilt=26, nfft=512, lowfreq=0, highfreq=None, preemph=0.97,
+                      ceplifter=22, appendEnergy=True)
+        dsignal = delta(signal, N=1)
+        ddsignal = delta(dsignal, N=1)
+        signal = np.stack([signal, dsignal, ddsignal], axis=2)
+        return signal
+
+    def _read_wav_and_pad(self,fname):
+        _, wav = wavfile.read(fname)
+        wav = wav.astype(np.float32) / np.iinfo(np.int16).max
+
+        # be aware, some files are shorter than 1 sec!
+        # if label_id is unknow drop 90%
+        len_wav = wav.shape[0]
+        if len_wav < self.L:
+            if self.config.padding:
+                # todo: test
+                # randomly insert wav into a 16k zero pad
+                padded = np.zeros([self.L])
+                start = np.random.randint(0, self.L - len_wav)
+                end = start + len_wav
+                padded[start:end] = wav
+                wav = padded
+        if len_wav > self.L:
+            print(len_wav)
+            beg = np.random.randint(0, len_wav - self.L)
+        else:
+            beg = 0
+
+        signal = wav[beg: beg + self.L]
+        return signal
+
     def data_gen(self, mode):
         if mode in ['train','valid']:
             if mode == 'train':
@@ -74,10 +109,10 @@ class SoundCorpusCreator:
                 size = len(data)
                 for _ in range(int(size * self.config.pure_silence_portion)):
                     data.append((self.config.name2id['silence'], '', 'assets/data_augmentation/silence/pure_silence.wav'))
-                background_silence_fns = os.listdir('assets/data_augmentation/silence/background/')
+                background_silence_fns = os.listdir(self.config.dir_background_noise)
                 background_silence_fns = [fn for fn in background_silence_fns if fn.endswith('.wav')]
                 for _ in range(int(size * self.config.background_silence_portion)):
-                    fn = 'assets/data_augmentation/silence/background/' + random.choice(background_silence_fns)
+                    fn = self.config.dir_background_noise + random.choice(background_silence_fns)
                     data.append((self.config.name2id['silence'], '',fn))
 
             elif mode == 'valid':
@@ -91,87 +126,58 @@ class SoundCorpusCreator:
             # Feel free to add any augmentation
             for (label_id, uid, fname) in data:
                 try:
-                    _, wav = wavfile.read(fname)
-                    wav = wav.astype(np.float32) / np.iinfo(np.int16).max
-
-                    # be aware, some files are shorter than 1 sec!
-                    # if label_id is unknow drop 90%
-                    len_wav = len(wav)
-                    if len_wav < self.L:
-                        if self.config.padding:
-                            # todo: test
-                            # randomly insert wav into a 16k zero pad
-                            padded = np.zeros([self.L])
-                            start = np.random.randint(0,self.L-len_wav)
-                            end = start + len_wav
-                            padded[start:end] = wav
-                            wav = padded
-                        # continue
-
-                    # let's generate more silence!
-                    #if self.config.generate_silence:
-                    #    samples_per_file = 1 if label_id != self.config.name2id['silence'] else 20
-                    #else:
-                    samples_per_file = 1
-                    for _ in range(samples_per_file):
-                        if len(wav) > self.L:
-                            beg = np.random.randint(0, len(wav) - self.L)
-                        else:
-                            beg = 0
-
-                        signal = wav[beg: beg + self.L]
-                        if self.config.background_silence_portion > 0 and label_id == self.config.name2id['silence']:
-                            # make background noise more silent:
-                            wav = wav / np.random.uniform(2,10)
-
-                        if self.config.mfcc:
-                            signal = mfcc(signal, samplerate=16000, winlen=0.025, winstep=0.01, numcep=13,
-                                 nfilt=26, nfft=512, lowfreq=0, highfreq=None, preemph=0.97,
-                                 ceplifter=22, appendEnergy=True)
-                            dsignal = delta(signal,N=1)
-                            ddsignal = delta(dsignal, N=1)
-                            signal = np.stack([signal,dsignal,ddsignal], axis = 2)
+                    signal = self._read_wav_and_pad(fname)
 
 
-                        yield dict(
-                            target=np.int32(label_id),
-                            wav=signal,
-                        )
+
+                    if self.config.background_silence_portion > 0 and label_id == self.config.name2id['silence']:
+                        # make background noise more silent:
+                        signal = signal / np.random.uniform(2,10)
+
+                    if self.config.mfcc:
+                        signal = self._do_mfcc(signal)
+
+
+                    yield dict(
+                        target=np.int32(label_id),
+                        wav=signal,
+                    )
 
                 except Exception as err:
                     print(err, label_id, uid, fname)
         elif self.config.mode in ['test']:
             for path in self.test_data:
-                _, wav = wavfile.read(path)
-                signal = wav.astype(np.float32) / np.iinfo(np.int16).max
-                 # be aware, some files are shorter than 1 sec!
-
-                len_wav = len(signal)
-                if len_wav > self.L:
-                    print(len_wav)
-                if len_wav < self.L:
-                    print(len_wav)
-                    if self.config.padding:
-                        # todo: test
-                        # randomly insert wav into a 16k zero pad
-                        padded = np.zeros([self.L])
-                        start = np.random.randint(0, self.L - len_wav)
-                        end = start + len_wav
-                        padded[start:end] = wav
-                        wav = padded
+                signal = self._read_wav_and_pad(path)
                 fname = os.path.basename(path)
                 if self.config.mfcc:
-                    signal = mfcc(wav, samplerate=16000, winlen=0.025, winstep=0.01, numcep=13,
-                                  nfilt=26, nfft=512, lowfreq=0, highfreq=None, preemph=0.97,
-                                  ceplifter=22, appendEnergy=True)
-                    dsignal = delta(signal, N=1)
-                    ddsignal = delta(dsignal, N=1)
-                    signal = np.stack([signal, dsignal, ddsignal], axis=2)
+                    signal = self._do_mfcc(signal)
                 yield dict(
                     sample=np.string_(fname),
                     wav=signal,
                 )
+        elif self.config.mode == 'only_background':
 
+            data = []
+            background_silence_fns = os.listdir(self.config.dir_background_noise)
+            background_silence_fns = [self.config.dir_background_noise + fn for fn in background_silence_fns if fn.endswith('.wav')]
+            for fn in background_silence_fns:
+                data.append((99, '', fn))
+            np.random.shuffle(data)
+                # Feel free to add any augmentation
+            for (label_id, uid, fname) in data:
+                try:
+                    signal = self._read_wav_and_pad(fname)
+
+                    if self.config.mfcc:
+                        signal = self._do_mfcc(signal)
+
+                    yield dict(
+                        target=np.int32(label_id),
+                        wav=signal,
+                    )
+
+                except Exception as err:
+                    print(err, label_id, uid, fname)
     def load_data(self, ignore_background=True):
         """ Return 2 lists of tuples:
         [(class_id, user_id, path), ...] for train
@@ -284,3 +290,7 @@ if __name__ == '__main__':
     print(info_dict['id2name'])
     with open(cfg_train.save_dir + 'infos.p','wb') as f:
         pickle.dump(info_dict,f)
+
+    cfg_bg = SC_Config(mode='only_background')
+    train_corpus = SoundCorpusCreator(cfg_bg)
+    len_bg = train_corpus.build_corpus('only_background')

@@ -1,13 +1,16 @@
 import os
 import pickle
 import numpy as np
-
+from python_speech_features import mfcc, delta
 
 class SoundCorpus:
 
-    def __init__(self, soundcorpus_dir, mode = 'train'):
+    def __init__(self, soundcorpus_dir, mode = 'train', fn = None):
         self.mode = mode
-        self.fp = soundcorpus_dir + [fn for fn in os.listdir(soundcorpus_dir) if fn.startswith(self.mode)][0]
+        if fn is None:
+            self.fp = soundcorpus_dir + [fn for fn in os.listdir(soundcorpus_dir) if fn.startswith(self.mode)][0]
+        else:
+            self.fp = soundcorpus_dir + fn
         self.info_dict_fp = soundcorpus_dir + 'infos.p'
         self.decoder = None
         self.encoder = None
@@ -57,4 +60,72 @@ class SoundCorpus:
                     y = []
 
 
+class AdvancedBatchGen:
+
+    def __init__(self, TrainCorpus, BackgroundCorpus, batch_size):
+        self.batch_size = batch_size
+        self.train_corpus = TrainCorpus
+        self.background_corpus = BackgroundCorpus
+
+    @staticmethod
+    def _combine_wav(wav1,wav2,factor_wav1):
+        try:
+            combined_wav = factor_wav1 * wav1 + (1-factor_wav1) * wav2
+        except:
+            print(factor_wav1)
+            print(wav1.shape)
+            print(wav2.shape)
+            combined_wav = wav1
+        return combined_wav
+
+    @staticmethod
+    def _do_mfcc(signal):
+        signal = mfcc(signal, samplerate=16000, winlen=0.025, winstep=0.01, numcep=13,
+                      nfilt=26, nfft=512, lowfreq=0, highfreq=None, preemph=0.97,
+                      ceplifter=22, appendEnergy=True)
+        dsignal = delta(signal, N=1)
+        ddsignal = delta(dsignal, N=1)
+        signal = np.stack([signal, dsignal, ddsignal], axis=2)
+        return signal
+
+    def gen_train(self):
+        with open(self.train_corpus.fp, 'rb') as f:
+            unpickler = pickle.Unpickler(f)
+            while True:
+                data = unpickler.load()
+                yield data
+
+    def gen_bg(self):
+        with open(self.background_corpus.fp, 'rb') as f:
+            unpickler = pickle.Unpickler(f)
+            while True:
+                data = unpickler.load()
+                yield data
+
+    def batch_gen(self):
+        x = []
+        y = []
+        gen_train = self.gen_train()
+        gen_bg = self.gen_bg()
+        while True:
+            #try:
+            train_data = next(gen_train)
+            try:
+                bg_data = next(gen_bg)
+            except EOFError:
+                gen_bg = self.gen_bg()
+                bg_data = next(gen_bg)
+            train_wav = train_data['wav']
+            bg_wav = bg_data['wav']
+            label = train_data['target']
+            factor_mix = np.random.uniform(0.6,0.9)
+            wav = self._combine_wav(train_wav,bg_wav,factor_mix)
+            signal = self._do_mfcc(wav)
+            x.append(signal)
+            y.append(label)
+            if len(x) == self.batch_size:
+                x = np.asarray(x)
+                yield x, y
+                x = []
+                y = []
 
