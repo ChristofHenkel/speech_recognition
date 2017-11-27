@@ -62,20 +62,28 @@ class SoundCorpus:
 
 class AdvancedBatchGen:
 
-    def __init__(self, TrainCorpus, BackgroundCorpus, batch_size):
+    def __init__(self, TrainCorpus, BackgroundCorpus, UnknownCorpus, batch_size):
         self.batch_size = batch_size
         self.train_corpus = TrainCorpus
         self.background_corpus = BackgroundCorpus
+        self.unknown_corpus = UnknownCorpus
+        self.lower_bound_noise_mix = 0.6
+        self.upper_bound_noise_mix = 1
+        self.portion_unknown = 0.3
+        self.portion_noised = 0.5
 
     @staticmethod
-    def _combine_wav(wav1,wav2,factor_wav1):
-        try:
-            combined_wav = factor_wav1 * wav1 + (1-factor_wav1) * wav2
-        except:
-            print(factor_wav1)
-            print(wav1.shape)
-            print(wav2.shape)
-            combined_wav = wav1
+    def _combine_wav(wav1,wav2,factor_wav1, wav1_is_silence = False):
+        if  wav1_is_silence:
+            combined_wav = wav1 + factor_wav1 * wav2
+        else:
+            try:
+                combined_wav = factor_wav1 * wav1 + (1-factor_wav1) * wav2
+            except:
+                print(factor_wav1)
+                print(wav1.shape)
+                print(wav2.shape)
+                combined_wav = wav1
         return combined_wav
 
     @staticmethod
@@ -102,24 +110,57 @@ class AdvancedBatchGen:
                 data = unpickler.load()
                 yield data
 
+    def gen_unknown(self):
+        with open(self.unknown_corpus.fp, 'rb') as f:
+            unpickler = pickle.Unpickler(f)
+            while True:
+                data = unpickler.load()
+                yield data
+
     def batch_gen(self):
         x = []
         y = []
         gen_train = self.gen_train()
         gen_bg = self.gen_bg()
+        gen_unknown = self.gen_unknown()
         while True:
-            #try:
-            train_data = next(gen_train)
+            if np.random.rand() > self.portion_unknown:
+                try:
+                    train_data = next(gen_train)
+                except EOFError:
+                    print('restarting gen_train')
+                    gen_train = self.gen_train()
+                    train_data = next(gen_train)
+                from_unknown = False
+            else:
+                try:
+                    train_data = next(gen_unknown)
+
+                except EOFError:
+                    print('restarting gen_unknown')
+                    gen_unknown = self.gen_unknown()
+                    train_data = next(gen_unknown)
+                from_unknown = True
             try:
                 bg_data = next(gen_bg)
             except EOFError:
+                print('restarting gen_bg')
                 gen_bg = self.gen_bg()
                 bg_data = next(gen_bg)
             train_wav = train_data['wav']
             bg_wav = bg_data['wav']
             label = train_data['target']
-            factor_mix = np.random.uniform(0.6,0.9)
-            wav = self._combine_wav(train_wav,bg_wav,factor_mix)
+            factor_mix = np.random.uniform(self.lower_bound_noise_mix,self.upper_bound_noise_mix)
+            if np.random.rand() > self.portion_noised:
+                if not from_unknown:
+                    if label == 10:
+                        wav = self._combine_wav(train_wav,bg_wav,factor_mix, wav1_is_silence=True)
+                    else:
+                        wav = self._combine_wav(train_wav, bg_wav, factor_mix, wav1_is_silence=False)
+                else:
+                    wav = train_wav
+            else:
+                wav = train_wav
             signal = self._do_mfcc(wav)
             x.append(signal)
             y.append(label)

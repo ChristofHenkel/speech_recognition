@@ -70,7 +70,7 @@ with graph.as_default():
     saver = tf.train.Saver()
 
 def predict():
-    fn_model = 'models/model7/logs5/model_mfcc_bsize256_e9.ckpt'
+    fn_model = 'models/model7/logs13/model_mfcc_bsize256_e9.ckpt'
     # %%
     id2name = corpus.decoder
 

@@ -22,18 +22,20 @@ class Config:
     use_batch_norm = True
     keep_prob = 0.5
     max_gradient = 5
-    learning_rate = 0.5
+    tf_seed = 4
+    learning_rate = 1
     display_step = 10
     epochs = 10
-    logs_path = 'models/model7/logs5/'
+    logs_path = 'models/model7/logs13/'
 
 cfg = Config()
 
 corpus = SoundCorpus(cfg.soundcorpus_dir,mode='train')
 valid_corpus = SoundCorpus(cfg.soundcorpus_dir, mode = 'valid')
 
-bg_corpus = SoundCorpus('assets/corpora/corpus10/',mode='train', fn = 'only_background.p.soundcorpus.p')
-advanced_gen = AdvancedBatchGen(corpus,bg_corpus, cfg.batch_size)
+bg_corpus = SoundCorpus('assets/corpora/corpus10/',mode='train', fn = 'background.p.soundcorpus.p')
+unknown_corpus = SoundCorpus('assets/corpora/corpus10/',mode='train', fn = 'unknown.p.soundcorpus.p')
+advanced_gen = AdvancedBatchGen(corpus,bg_corpus,unknown_corpus, cfg.batch_size)
 
 
 
@@ -54,7 +56,7 @@ cnn_model = Model(cfg)
 graph = tf.Graph()
 with graph.as_default():
     # tf Graph input
-    tf.set_random_seed(3)
+    tf.set_random_seed(cfg.tf_seed)
     with tf.name_scope("Input"):
         x = tf.placeholder(tf.float32, shape=(None, 99, 13, 3), name="input")
         y = tf.placeholder(tf.int64, shape=(None,), name="input")
@@ -133,16 +135,17 @@ def train_model():
         sess.run(init)
         global_step = 0
 
+        batch_gen = advanced_gen.batch_gen()
         for epoch in range(cfg.epochs):
             step = 1
 
             # Keep training until reach max iterations
             current_time = time.time()
-            batch_gen = advanced_gen.batch_gen()
+
             while step * batch_size < training_iters:
                 #for (batch_x,batch_y) in batch_gen:
                 batch_x, batch_y = next(batch_gen)
-                logging.info('epoch ' + str(epoch) + ' - step ' + str(step))
+                # logging.info('epoch ' + str(epoch) + ' - step ' + str(step))
                 #batch_x, batch_y = next(gen.batch_gen())
 
                 # Run optimization op (backprop)
@@ -150,7 +153,7 @@ def train_model():
                 train_writer.add_summary(summary_, global_step)
                 if step % cfg.display_step == 0:
                     # Calculate batch accuracy
-
+                    logging.info('epoch ' + str(epoch) + ' - step ' + str(step))
                     logging.info('runtime for batch of ' + str(cfg.batch_size * cfg.display_step) + ' ' + str(time.time()-current_time))
                     current_time = time.time()
                     c, acc, cm= sess.run([cost, accuracy,confusion_matrix], feed_dict={x: batch_x, y: batch_y, keep_prob: cfg.keep_prob})
