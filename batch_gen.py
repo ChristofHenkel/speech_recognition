@@ -34,43 +34,34 @@ class SoundCorpus:
                 #try:
                 item = unpickler.load()
 
-                #except:
-                #    print('hi')
-                #    x = np.asarray(x)
-                #    if not self.mode in ['test']:
-                #        y = np.asarray(y)
-                #    # y = np.reshape(y, (self.bsize,1))
-                #    yield x, y
-
                 x.append(item['wav'])
-                if self.mode in ['train','valid']:
-                    y.append(item['target'])
-                elif self.mode == 'test':
-                    y.append(item['sample'])
-                else:
-                    pass
+                y.append(item['label'])
+
                 if len(x) == batch_size:
                     # reshape to np arrays
                     x = np.asarray(x)
                     if not self.mode in ['test']:
                         y = np.asarray(y)
-                    #y = np.reshape(y, (self.bsize,1))
                     yield x, y
                     x = []
                     y = []
 
 
-class AdvancedBatchGen:
+class BatchGenerator:
 
-    def __init__(self, TrainCorpus, BackgroundCorpus, UnknownCorpus, batch_size):
+    def __init__(self, TrainCorpus, BackgroundCorpus, UnknownCorpus,SilenceCorpus, batch_size):
         self.batch_size = batch_size
         self.train_corpus = TrainCorpus
         self.background_corpus = BackgroundCorpus
         self.unknown_corpus = UnknownCorpus
+        self.silence_corpus = SilenceCorpus
         self.lower_bound_noise_mix = 0.6
         self.upper_bound_noise_mix = 1
-        self.portion_unknown = 0.3
+        self.portion_unknown = 0.1
+        self.portion_silence = 0.1
         self.portion_noised = 0.5
+        self.noise_unknown = False
+        self.noise_silence = True
 
     @staticmethod
     def _combine_wav(wav1,wav2,factor_wav1, wav1_is_silence = False):
@@ -117,22 +108,34 @@ class AdvancedBatchGen:
                 data = unpickler.load()
                 yield data
 
+    def gen_silence(self):
+        with open(self.silence_corpus.fp, 'rb') as f:
+            unpickler = pickle.Unpickler(f)
+            while True:
+                data = unpickler.load()
+                yield data
+
     def batch_gen(self):
         x = []
         y = []
         gen_train = self.gen_train()
-        gen_bg = self.gen_bg()
+        gen_noise = self.gen_bg()
         gen_unknown = self.gen_unknown()
+        gen_silence = self.gen_silence()
         while True:
-            if np.random.rand() > self.portion_unknown:
+            type = np.random.choice(['known', 'unknown', 'silence'],
+                                    p=[1 - self.portion_unknown + self.portion_silence,
+                                       self.portion_unknown,
+                                       self.portion_silence])
+
+            if type == 'known':
                 try:
                     train_data = next(gen_train)
                 except EOFError:
                     print('restarting gen_train')
                     gen_train = self.gen_train()
                     train_data = next(gen_train)
-                from_unknown = False
-            else:
+            elif type == 'unknown':
                 try:
                     train_data = next(gen_unknown)
 
@@ -140,27 +143,40 @@ class AdvancedBatchGen:
                     print('restarting gen_unknown')
                     gen_unknown = self.gen_unknown()
                     train_data = next(gen_unknown)
-                from_unknown = True
+            else:
+                try:
+                    train_data = next(gen_silence)
+
+                except EOFError:
+                    print('restarting gen_silence')
+                    gen_unknown = self.gen_silence()
+                    train_data = next(gen_silence)
             try:
-                bg_data = next(gen_bg)
+                noise = next(gen_noise)
             except EOFError:
                 print('restarting gen_bg')
-                gen_bg = self.gen_bg()
-                bg_data = next(gen_bg)
-            train_wav = train_data['wav']
-            bg_wav = bg_data['wav']
-            label = train_data['target']
+                gen_noise = self.gen_bg()
+                noise = next(gen_noise)
+
+            raw_wav = train_data['wav']
+            noise_wav = noise['wav']
+            label = train_data['label']
             factor_mix = np.random.uniform(self.lower_bound_noise_mix,self.upper_bound_noise_mix)
             if np.random.rand() > self.portion_noised:
-                if not from_unknown:
-                    if label == 10:
-                        wav = self._combine_wav(train_wav,bg_wav,factor_mix, wav1_is_silence=True)
+                if type is 'silence':
+                    if self.noise_silence:
+                        wav = self._combine_wav(raw_wav, noise_wav, factor_mix)
                     else:
-                        wav = self._combine_wav(train_wav, bg_wav, factor_mix, wav1_is_silence=False)
+                        wav = raw_wav
+                elif type is 'known':
+                    wav = self._combine_wav(raw_wav, noise_wav, factor_mix)
                 else:
-                    wav = train_wav
+                    if self.noise_unknown:
+                        wav = self._combine_wav(raw_wav, noise_wav, factor_mix)
+                    else:
+                        wav = raw_wav
             else:
-                wav = train_wav
+                wav = raw_wav
             signal = self._do_mfcc(wav)
             x.append(signal)
             y.append(label)

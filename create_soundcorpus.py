@@ -14,21 +14,22 @@ class SC_Config:
     def __init__(self, mode='train'):
         self.padding = True
         self.mfcc = False
-        self.pure_silence_portion = 0.05 # How  much of the resulting data should be pure silence.
+        self.amount_silence = 2000 #number of training data with label silence
+        self.pure_silence_portion = 0.5 # How  much silence should be pure silence the rest is sampled from backgroundnoise.
         self.background_silence_portion = 0 # How  much of the resulting data should be silence from background.
         self.unknown_portion = 0 # How much should be audio outside the wanted classes.
         self.possible_labels = 'yes no up down left right on off stop go silence unknown'.split()
         self.id2name = {i: name for i, name in enumerate(self.possible_labels)}
         self.name2id = {name: i for i, name in self.id2name.items()}
         self.mode = mode
-        self.modes = ['train','valid','test','background','unknown']
+        assert self.mode in ['train','valid','test','background','unknown','silence']
         self.data_root = 'assets/'
         self.dir_files = 'train/audio/*/*wav'
         self.validation_list_fp = 'train/validation_list.txt'
-        self.save_dir = self.data_root + 'corpora/corpus10/'
+        self.save_dir = self.data_root + 'corpora/corpus11/'
         self.seed = np.random.seed(1)
         self.paths_test = glob(os.path.join('assets', 'test/audio/*wav'))
-        self.dir_background_noise = 'assets/data_augmentation/silence/background/'
+        self.dir_noise = 'assets/data_augmentation/silence/background/'
         self.L = 16000 # length of files
 
 
@@ -49,26 +50,12 @@ class SoundCorpusCreator:
         self.test_data = None
         if self.config.mode in ['train','valid','unknown']:
             self.train_data, self.valid_data = self.load_data()
-            # self.data = self.set_data()
-          #  self.size = None
-          #  self.set_data()
         elif self.config.mode == 'test':
             self.test_data = self.config.paths_test
         self.L = self.config.L
 
-    def _update_config(self,cfg):
-        self.config = cfg
-
-    #def set_data(self):
-    #    if self.config.mode == 'train':
-    #        self.data = self.train_data
-    #    elif self.config.mode == 'valid':
-    #        self.data = self.valid_data
-    #    else:
-    #        logging.warning('wrong mode')
-    #    self.size = len(self.data)
-
-    def _do_mfcc(self,signal):
+    @staticmethod
+    def _do_mfcc(signal):
         signal = mfcc(signal, samplerate=16000, winlen=0.025, winstep=0.01, numcep=13,
                       nfilt=26, nfft=512, lowfreq=0, highfreq=None, preemph=0.97,
                       ceplifter=22, appendEnergy=True)
@@ -79,14 +66,13 @@ class SoundCorpusCreator:
 
     def _read_wav_and_pad(self,fname):
         _, wav = wavfile.read(fname)
-        wav = wav.astype(np.float32) / np.iinfo(np.int16).max
+        # wav = wav.astype(np.float32) / np.iinfo(np.int16).max
 
-        # be aware, some files are shorter than 1 sec!
-        # if label_id is unknow drop 90%
+
+
         len_wav = wav.shape[0]
-        if len_wav < self.L:
+        if len_wav < self.L:    # be aware, some files are shorter than 1 sec!
             if self.config.padding:
-                # todo: test
                 # randomly insert wav into a 16k zero pad
                 padded = np.zeros([self.L])
                 start = np.random.randint(0, self.L - len_wav)
@@ -102,68 +88,59 @@ class SoundCorpusCreator:
         signal = wav[beg: beg + self.L]
         return signal
 
-    def data_gen(self, mode):
-        if mode in ['train','valid']:
-            if mode == 'train':
+    def data_gen(self):
+        if self.config.mode in ['train','valid']:
+            if self.config.mode == 'train':
                 data = self.train_data
-                size = len(data)
-                for _ in range(int(size * self.config.pure_silence_portion)):
-                    data.append((self.config.name2id['silence'], '', 'assets/data_augmentation/silence/pure_silence.wav'))
-                background_silence_fns = os.listdir(self.config.dir_background_noise)
-                background_silence_fns = [fn for fn in background_silence_fns if fn.endswith('.wav')]
-                for _ in range(int(size * self.config.background_silence_portion)):
-                    fn = self.config.dir_background_noise + random.choice(background_silence_fns)
-                    data.append((self.config.name2id['silence'], '',fn))
-
-            elif mode == 'valid':
-                data = self.valid_data
-            elif mode == 'test':
-                data = self.test_data
+                data = [d for d in data if d[0] != self.config.name2id['unknown']]
             else:
-                data = None
-                logging.critical('wrong mode')
+                data = self.valid_data
+                # valdation data includes unknown
+
             np.random.shuffle(data)
-            # Feel free to add any augmentation
             for (label_id, uid, fname) in data:
                 try:
                     signal = self._read_wav_and_pad(fname)
 
-
-
-                    if self.config.background_silence_portion > 0 and label_id == self.config.name2id['silence']:
-                        # make background noise more silent:
-                        signal = signal / np.random.uniform(2,10)
-
                     if self.config.mfcc:
                         signal = self._do_mfcc(signal)
 
-
-                    yield dict(
-                        target=np.int32(label_id),
-                        wav=signal,
-                    )
+                    yield dict(label=np.int32(label_id),wav=signal,)
 
                 except Exception as err:
                     print(err, label_id, uid, fname)
+
         elif self.config.mode in ['test']:
             for path in self.test_data:
                 signal = self._read_wav_and_pad(path)
                 fname = os.path.basename(path)
                 if self.config.mfcc:
                     signal = self._do_mfcc(signal)
-                yield dict(
-                    sample=np.string_(fname),
-                    wav=signal,
-                )
-        elif self.config.mode == 'background':
+                yield dict(label=np.string_(fname),wav=signal,)
 
+        elif self.config.mode == 'background':
             data = []
-            background_silence_fns = os.listdir(self.config.dir_background_noise)
-            background_silence_fns = [self.config.dir_background_noise + fn for fn in background_silence_fns if fn.endswith('.wav')]
-            for fn in background_silence_fns:
+            noise_fns = [self.config.dir_noise + fn for fn in os.listdir(self.config.dir_noise) if fn.endswith('.wav')]
+            for fn in noise_fns:
                 data.append((99, '', fn))
             np.random.shuffle(data)
-                # Feel free to add any augmentation
+            for (label_id, uid, fn) in data:
+                try:
+                    signal = self._read_wav_and_pad(fn)
+
+                    if self.config.mfcc:
+                        signal = self._do_mfcc(signal)
+
+                    yield dict(label=np.int32(label_id),wav=signal,)
+
+                except Exception as err:
+                    print(err, label_id, uid, fn)
+
+        elif self.config.mode == 'unknown':
+            data = self.train_data
+            data = [d for d in data if d[0] == self.config.name2id['unknown']]
+            print(len(data))
+            np.random.shuffle(data)
             for (label_id, uid, fname) in data:
                 try:
                     signal = self._read_wav_and_pad(fname)
@@ -172,17 +149,24 @@ class SoundCorpusCreator:
                         signal = self._do_mfcc(signal)
 
                     yield dict(
-                        target=np.int32(label_id),
+                        label=np.int32(label_id),
                         wav=signal,
                     )
 
                 except Exception as err:
                     print(err, label_id, uid, fname)
-        elif self.config.mode == 'unknown':
+        elif self.config.mode == 'silence':
+            data = []
+            # append pure silence
+            for _ in range(int(self.config.amount_silence * self.config.pure_silence_portion)):
+                data.append((self.config.name2id['silence'], '', 'assets/data_augmentation/silence/pure_silence.wav'))
 
-            data = self.train_data
-            data = [d for d in data if d[0] == self.config.name2id['unknown']]
-            print(len(data))
+            noise_fns = os.listdir(self.config.dir_noise)
+            noise_fns = [fn for fn in noise_fns if fn.endswith('.wav')]
+            #append background noise as silence
+            for _ in range(int(self.config.amount_silence * (1-self.config.pure_silence_portion))):
+                fn = self.config.dir_noise + random.choice(noise_fns)
+                data.append((self.config.name2id['silence'], '', fn))
             np.random.shuffle(data)
             # Feel free to add any augmentation
             for (label_id, uid, fname) in data:
@@ -193,13 +177,14 @@ class SoundCorpusCreator:
                         signal = self._do_mfcc(signal)
 
                     yield dict(
-                        target=np.int32(label_id),
+                        label=np.int32(label_id),
                         wav=signal,
                     )
 
                 except Exception as err:
                     print(err, label_id, uid, fname)
-    def load_data(self, ignore_background=True):
+
+    def load_data(self):
         """ Return 2 lists of tuples:
         [(class_id, user_id, path), ...] for train
         [(class_id, user_id, path), ...] for validation
@@ -225,46 +210,43 @@ class SoundCorpusCreator:
                 label, uid = r.group(2), r.group(3)
                 if label not in possible:
 
+                    #ignore noise fns
                     if label == '_background_noise_':
-                        if ignore_background:
-                            label = 'ignore'
-                        else:
-                            label = 'silence'
+                        continue
+
                     else:
                         label = 'unknown'
 
 
-                if label == 'unknown':
-                    if np.random.rand() > self.config.unknown_portion:
-                        continue
-                if not label == 'ignore':
-                    label_id = self.config.name2id[label]
-                    sample = (label_id, uid, entry)
-                    if uid in valset:
-                        val.append(sample)
-                    else:
-                        train.append(sample)
+                label_id = self.config.name2id[label]
+                sample = (label_id, uid, entry)
+                if uid in valset:
+                    val.append(sample)
+                else:
+                    train.append(sample)
 
         print('There are {} train and {} val samples'.format(len(train), len(val)))
         return train, val
 
 
     def build_train_and_val_corpus(self):
-        len_train = self.build_corpus('train')
-        len_valid = self.build_corpus('valid')
+        self.config.mode = 'train'
+        len_train = self.build_corpus()
+        self.config.mode = 'valid'
+        len_valid = self.build_corpus()
         return len_train, len_valid
 
-    def build_corpus(self, mode):
+    def build_corpus(self):
         corpus = []
 
         k = 0
-        for date in self.data_gen(mode = mode):
+        for date in self.data_gen():
             if k % 100 == 0:
                 logging.debug('progress: ' + str(k) + '/' )
             corpus.append(date)
             k += 1
         save_name = self.config.save_dir
-        save_name += mode + '.'
+        save_name += self.config.mode + '.'
         save_name += ''.join(self.flags)
         save_name += '.soundcorpus.p'
         logging.info('saving under: ' + save_name)
@@ -274,6 +256,7 @@ class SoundCorpusCreator:
                 pickler.dump(e)
         return len(corpus)
 
+    ## UNUSED
     def _get_label_distribution(self, data):
         labels = []
         for d in data:
@@ -287,6 +270,7 @@ class SoundCorpusCreator:
             count_dict[item] = labels.count(item)
         return count_dict
 
+        ## UNUSED
     @staticmethod
     def change_volume(wav,factor):
         wav = wav / factor
@@ -300,25 +284,32 @@ if __name__ == '__main__':
 
     cfg_test = SC_Config(mode='test')
     test_corpus = SoundCorpusCreator(cfg_test)
-    len_test = test_corpus.build_corpus('test')
+    len_test = test_corpus.build_corpus()
+
+    cfg_bg = SC_Config(mode='background')
+    train_corpus = SoundCorpusCreator(cfg_bg)
+    len_bg = train_corpus.build_corpus()
+
+    cfg_unknown = SC_Config(mode='unknown')
+    cfg_unknown.unknown_portion = 1
+    unknown_corpus = SoundCorpusCreator(cfg_unknown)
+    len_unknown = unknown_corpus.build_corpus()
+
+    cfg_silence = SC_Config(mode='silence')
+    silence_corpus = SoundCorpusCreator(cfg_silence)
+    len_silence = silence_corpus.build_corpus()
 
     # should also save len of corpora
     info_dict = {'id2name': cfg_train.id2name,
                  'name2id': cfg_train.name2id,
                  'len_train': len_train,
                  'len_valid': len_valid,
-                 'len_test': len_test
+                 'len_test': len_test,
+                 'len_unknown':len_unknown,
+                 'len_background':len_bg
+
                  }
 
     print(info_dict['id2name'])
     with open(cfg_train.save_dir + 'infos.p','wb') as f:
         pickle.dump(info_dict,f)
-
-    cfg_bg = SC_Config(mode='background')
-    train_corpus = SoundCorpusCreator(cfg_bg)
-    len_bg = train_corpus.build_corpus('background')
-
-    cfg_unknown = SC_Config(mode='unknown')
-    cfg_unknown.unknown_portion = 1
-    unknown_corpus = SoundCorpusCreator(cfg_unknown)
-    len_unknown = unknown_corpus.build_corpus('unknown')

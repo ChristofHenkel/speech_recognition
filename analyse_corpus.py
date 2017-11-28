@@ -1,14 +1,18 @@
 import pickle
 import logging
+import numpy as np
+import sounddevice as sd
 
-class CorpusGen:
+
+class Analyzer:
 
     def __init__(self, soundcorpus_fp):
         self.fp = soundcorpus_fp
+        self.data = None
+        self.fs = 16000
+        self.gen = self._gen()
 
-    def gen(self):
-        x = []
-        y = []
+    def _gen(self):
         with open(self.fp, 'rb') as file:
             unpickler = pickle.Unpickler(file)
             while True:
@@ -18,20 +22,14 @@ class CorpusGen:
                 except:
                     break
 
-
-class Analyzer:
-
-    def __init__(self, corpus_gen):
-        self.gen = corpus_gen()
-        self.data = None
-
     def get_all_data(self):
         content = []
-        for item in self.gen:
+        for item in self._gen():
             content.append(item)
-        self.data = content
+        return content
 
-    def get_label_distribution(self, data):
+    def get_label_distribution(self):
+        data = self.get_all_data()
         labels = [d['target'] for d in data]
         all_labels = list(set(labels))
         count_dict = {}
@@ -39,7 +37,14 @@ class Analyzer:
             count_dict[item] = labels.count(item)
         return count_dict
 
+    def play_next(self):
+        x = next(self.gen)
+        wav = x['wav']
+        sd.play(wav, self.fs, blocking=True)
 
-corpus_gen = CorpusGen('assets/corpora/corpus7/train.pm.soundcorpus.p')
-analyzer = Analyzer(corpus_gen)
-analyzer.get_label_distribution()
+
+analyzer = Analyzer('assets/corpora/corpus11/unknown.p.soundcorpus.p')
+count_dict = analyzer.get_label_distribution()
+print(count_dict)
+analyzer.play_next()
+

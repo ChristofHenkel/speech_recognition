@@ -22,4 +22,7 @@ def create_noise(fns,factor,lower_bound_silence,upper_bound_silence):
             wav_snip = wav_snip / np.random.uniform(lower_bound_silence,upper_bound_silence)
             wavfile.write(save_dir + fn[:-4] + str(b) + '.wav',L,wav_snip)
 
-create_noise(fns,10,1,2)
+
+if __name__ == '__main__':
+
+    create_noise(fns,10,1,2)

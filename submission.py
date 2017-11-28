@@ -50,27 +50,27 @@ with graph.as_default():
 
     with tf.variable_scope('logit'):
         logits = model.calc_logits(x, keep_prob, num_classes)
-        predictions = tf.nn.softmax(logits)
+        #predictions = tf.nn.softmax(logits)
 
-    with tf.variable_scope('costs'):
-        xent = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=y, logits=logits)
-        cost = tf.reduce_mean(xent, name='xent')
+    #with tf.variable_scope('costs'):
+        #xent = tf.nn.sparse_softmax_cross_entropy_with_logits(
+        #   labels=y, logits=logits)
+        #cost = tf.reduce_mean(xent, name='xent')
         # cost += self._decay()
 
-        tf.summary.scalar('cost', cost)
+        #tf.summary.scalar('cost', cost)
 
-    with tf.variable_scope('acc'):
+    #with tf.variable_scope('acc'):
         pred = tf.argmax(logits, 1)
-        correct_prediction = tf.equal(pred, tf.reshape(y, [-1]))
-        accuracy = tf.reduce_mean(
-            tf.cast(correct_prediction, tf.float32), name='accu')
+        #correct_prediction = tf.equal(pred, tf.reshape(y, [-1]))
+        #accuracy = tf.reduce_mean(
+        #    tf.cast(correct_prediction, tf.float32), name='accu')
 
-        tf.summary.scalar('accuracy', accuracy)
+        #tf.summary.scalar('accuracy', accuracy)
     saver = tf.train.Saver()
 
 def submission():
-    fn_model = 'models/model7/logs/model_mfcc_bsize256_e4.ckpt'
+    fn_model = 'models/model7/logs16/model_mfcc_bsize256_e16.ckpt'
     # %%
     id2name = corpus.decoder
     #cfg = Config()
@@ -95,7 +95,7 @@ def submission():
         except EOFError:
             pass
 
-        with open(os.path.join('assets/corpora/corpus8/', 'submission1.csv'), 'w') as fout:
+        with open(os.path.join('assets/corpora/corpus10/', 'submission3.csv'), 'w') as fout:
             fout.write('fname,label\n')
             for fname, label in submission.items():
                 fout.write('{},{}\n'.format(fname, label))

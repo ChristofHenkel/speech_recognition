@@ -23,10 +23,10 @@ class Config:
     keep_prob = 0.5
     max_gradient = 5
     tf_seed = 4
-    learning_rate = 1
+    learning_rate = 0.1
     display_step = 10
-    epochs = 10
-    logs_path = 'models/model7/logs13/'
+    epochs = 20
+    logs_path = 'models/model7/logs16/'
 
 cfg = Config()
 
@@ -87,7 +87,7 @@ with graph.as_default():
         tf.summary.scalar('accuracy', accuracy)
     with tf.variable_scope('acc_per_class'):
         for i in range(num_classes):
-            acc_id = confusion_matrix[i,i]/tf.reduce_sum(confusion_matrix[:,i])
+            acc_id = confusion_matrix[i,i]/tf.reduce_sum(confusion_matrix[i,:])
             tf.summary.scalar(corpus.decoder[i], acc_id)
 
 

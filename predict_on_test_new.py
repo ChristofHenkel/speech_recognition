@@ -70,7 +70,7 @@ with graph.as_default():
     saver = tf.train.Saver()
 
 def predict():
-    fn_model = 'models/model7/logs13/model_mfcc_bsize256_e9.ckpt'
+    fn_model = 'models/model7/logs15/model_mfcc_bsize256_e18.ckpt'
     # %%
     id2name = corpus.decoder
 
@@ -110,7 +110,7 @@ prediction, cm, acc = predict()
 
 acc_dict = {}
 for c in range(num_classes):
-    acc_id = cm[c,c]/sum(cm[:,c])
+    acc_id = cm[c,c]/sum(cm[c,:])
     acc_dict[decoder[c]] = acc_id
 
 
