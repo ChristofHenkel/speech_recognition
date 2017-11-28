@@ -124,7 +124,7 @@ class BatchGenerator:
         gen_silence = self.gen_silence()
         while True:
             type = np.random.choice(['known', 'unknown', 'silence'],
-                                    p=[1 - self.portion_unknown + self.portion_silence,
+                                    p=[1 - self.portion_unknown - self.portion_silence,
                                        self.portion_unknown,
                                        self.portion_silence])
 
@@ -149,7 +149,7 @@ class BatchGenerator:
 
                 except EOFError:
                     print('restarting gen_silence')
-                    gen_unknown = self.gen_silence()
+                    gen_silence = self.gen_silence()
                     train_data = next(gen_silence)
             try:
                 noise = next(gen_noise)

@@ -40,11 +40,11 @@ class SoundCorpusCreator:
 
         self.config = config
         self.data = None
-        self.flags = []
+        self.name_flags = []
         if self.config.padding:
-            self.flags.append('p')
+            self.name_flags.append('p')
         if self.config.mfcc:
-            self.flags.append('m')
+            self.name_flags.append('m')
         self.train_data = None
         self.valid_data = None
         self.test_data = None
@@ -247,7 +247,7 @@ class SoundCorpusCreator:
             k += 1
         save_name = self.config.save_dir
         save_name += self.config.mode + '.'
-        save_name += ''.join(self.flags)
+        save_name += ''.join(self.name_flags)
         save_name += '.soundcorpus.p'
         logging.info('saving under: ' + save_name)
         with open(save_name, 'wb') as f:
@@ -306,7 +306,8 @@ if __name__ == '__main__':
                  'len_valid': len_valid,
                  'len_test': len_test,
                  'len_unknown':len_unknown,
-                 'len_background':len_bg
+                 'len_background':len_bg,
+                 'len_silence':len_silence
 
                  }
 

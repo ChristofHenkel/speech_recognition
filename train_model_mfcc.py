@@ -3,7 +3,7 @@
 http://haythamfayek.com/2016/04/21/speech-processing-for-machine-learning.html
 """
 
-from batch_gen import SoundCorpus, AdvancedBatchGen
+from batch_gen import SoundCorpus, BatchGenerator
 import tensorflow as tf
 from tensorflow.contrib import layers
 import numpy as np
@@ -16,26 +16,27 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class Config:
-    soundcorpus_dir = 'assets/corpora/corpus10/'
+    soundcorpus_dir = 'assets/corpora/corpus11/'
     batch_size = 256
     is_training = True
     use_batch_norm = True
     keep_prob = 0.5
     max_gradient = 5
     tf_seed = 4
-    learning_rate = 0.1
+    learning_rate = 1
     display_step = 10
-    epochs = 20
-    logs_path = 'models/model7/logs16/'
+    epochs = 5
+    logs_path = 'models/model0/'
 
 cfg = Config()
 
 corpus = SoundCorpus(cfg.soundcorpus_dir,mode='train')
 valid_corpus = SoundCorpus(cfg.soundcorpus_dir, mode = 'valid')
 
-bg_corpus = SoundCorpus('assets/corpora/corpus10/',mode='train', fn = 'background.p.soundcorpus.p')
-unknown_corpus = SoundCorpus('assets/corpora/corpus10/',mode='train', fn = 'unknown.p.soundcorpus.p')
-advanced_gen = AdvancedBatchGen(corpus,bg_corpus,unknown_corpus, cfg.batch_size)
+bg_corpus = SoundCorpus(cfg.soundcorpus_dir,mode='train', fn = 'background.p.soundcorpus.p')
+unknown_corpus = SoundCorpus(cfg.soundcorpus_dir,mode='train', fn = 'unknown.p.soundcorpus.p')
+silence_corpus = SoundCorpus(cfg.soundcorpus_dir,mode='silence', fn = 'silence.p.soundcorpus.p')
+advanced_gen = BatchGenerator(corpus,bg_corpus,unknown_corpus,silence_corpus, cfg.batch_size)
 
 
 
