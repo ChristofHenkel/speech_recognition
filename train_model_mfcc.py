@@ -23,10 +23,11 @@ class Config:
     keep_prob = 0.5
     max_gradient = 5
     tf_seed = 4
-    learning_rate = 1
+    learning_rate = 0.01
     display_step = 10
-    epochs = 5
-    logs_path = 'models/model0/'
+    epochs = 50
+    epochs_per_save = 5
+    logs_path = 'models/model4/'
 
 cfg = Config()
 
@@ -126,7 +127,15 @@ def debug_model():
         print(l, acc)
         return cm, l, acc,pred_,y_, id1_
 
-
+def aggregate_y(batch_y):
+    knowns = [id for id in batch_y if id in [0,1,2,3,4,5,6,7,8,9]]
+    unknowns = [id for id in batch_y if id == 11]
+    silences = [id for id in batch_y if id == 10]
+    len_all = len(knowns) + len(unknowns) + len(silences)
+    port_knowns = len(knowns)/len_all
+    port_unknowns = len(unknowns)/len_all
+    port_silence = len(silences)/len_all
+    return dict(known=port_knowns,unknowns=port_unknowns,silence = port_silence, )
 
 def train_model():
     with tf.Session(graph=graph) as sess:
@@ -163,6 +172,7 @@ def train_model():
                     print(cm)
                 step += 1
                 global_step += 1
+            # if epoch % cfg.epochs_per_save == 0:
             print('saving model...', end='')
             model_name = 'model_%s_bsize%s_e%s.ckpt' % ('mfcc',batch_size,epoch)
 

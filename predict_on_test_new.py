@@ -11,22 +11,23 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 class Config:
-    soundcorpus_dir = 'assets/corpora/corpus9/'
-    batch_size = 249
+    soundcorpus_dir = 'assets/corpora/corpus11/'
+    batch_size = 287
     is_training = False
     use_batch_norm = False
     keep_prob = 1
     display_step = 10
-    logs_path = 'models/model5/logs/'
+
 
 
 cfg = Config()
+silence_corpus = SoundCorpus(cfg.soundcorpus_dir, mode = 'silence')
+test_corpus = SoundCorpus(cfg.soundcorpus_dir,mode='own_test',fn='own_test.p.soundcorpus.p')
 
-corpus = SoundCorpus(cfg.soundcorpus_dir,mode='train',fn='new_test_train.pm.soundcorpus.p')
+batch_gen = test_corpus.batch_gen(287, do_mfcc=True)
 
-batch_gen = corpus.batch_gen(249)
-
-decoder = corpus.decoder
+decoder = silence_corpus.decoder
+encoder = silence_corpus.encoder
 num_classes=len(decoder)
 
 model = Model(cfg)
@@ -70,9 +71,9 @@ with graph.as_default():
     saver = tf.train.Saver()
 
 def predict():
-    fn_model = 'models/model7/logs15/model_mfcc_bsize256_e18.ckpt'
+    fn_model = 'models/model4/model_mfcc_bsize256_e49.ckpt'
     # %%
-    id2name = corpus.decoder
+
 
     with tf.Session(graph=graph) as sess:
         # Restore variables from disk.
@@ -84,26 +85,53 @@ def predict():
             for (batch_x, batch_y) in batch_gen:
                 if k_batch % 1000 == 0:
                     logging.info(str(k_batch))
-                prediction, cm, acc = sess.run([pred,confusion_matrix, accuracy], feed_dict={x: batch_x, y:batch_y, keep_prob: 1.0})
-                #for k,p in enumerate(prediction[0]):
-                    #print(p)
+                predic, cm, acc = sess.run([pred,confusion_matrix, accuracy], feed_dict={x: batch_x, y:batch_y, keep_prob: 1.0})
+
 
                 print(cm)
                 print('Acc',acc)
                 k_batch += 1
         except EOFError:
+            print('test')
             pass
-    return prediction, cm, acc
+    return predic, cm, acc
 
 
 def build_new_test_corpus():
-    sc_cfg = SC_Config()
-    sc_cfg.dir_files = 'new_test/label/*/*wav'
-    sc_cfg.unknown_portion = 1
-    test_corpus = SoundCorpusCreator(sc_cfg)
-    sc_cfg.save_dir += 'new_test_'
-    test_corpus.build_corpus('train')
+    root = 'assets/new_test/label/'
+    sc_cfg = SC_Config('test')
+    data = []
+    label_folders = [l for l in os.listdir(root) if not l.startswith('.')]
+    for folder in label_folders:
+        fns = [fn for fn in os.listdir(root + folder + '/') if fn.endswith('.wav')]
+        for fn in fns:
+            if folder in sc_cfg.possible_labels:
+                label_id = sc_cfg.name2id[folder]
+            else:
+                label_id = sc_cfg.name2id['unknown']
+            data.append((label_id,'',root + folder + '/' + fn))
 
+    np.random.shuffle(data)
+    test_corpus = SoundCorpusCreator(sc_cfg)
+    corpus = []
+    for d in data:
+        label_id = d[0]
+        signal = test_corpus._read_wav_and_pad(d[2]) #rather static function
+        corpus.append(dict(label=np.int32(label_id),wav=signal,))
+    print(len(corpus))
+    save_name = sc_cfg.save_dir
+    save_name += 'own_test' + '.'
+    save_name += ''.join(['p'])
+    save_name += '.soundcorpus.p'
+    logging.info('saving under: ' + save_name)
+    with open(save_name, 'wb') as f:
+        pickler = pickle.Pickler(f)
+        for e in corpus:
+            pickler.dump(e)
+    return len(corpus)
+
+
+    #  display dict
 #if __name__ == '__main__':
 
 prediction, cm, acc = predict()
@@ -115,3 +143,8 @@ for c in range(num_classes):
 
 
 print(sum([cm[i,i] for i in range(num_classes-1)])/sum(sum(cm[:-1,:-1])))
+for item in acc_dict:
+    print(item,acc_dict[item])
+
+
+

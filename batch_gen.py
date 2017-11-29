@@ -2,11 +2,13 @@ import os
 import pickle
 import numpy as np
 from python_speech_features import mfcc, delta
+import sounddevice as sd
 
 class SoundCorpus:
 
     def __init__(self, soundcorpus_dir, mode = 'train', fn = None):
         self.mode = mode
+        assert self.mode in ['train','own_test','test','unknown','background','silence','valid']
         if fn is None:
             self.fp = soundcorpus_dir + [fn for fn in os.listdir(soundcorpus_dir) if fn.startswith(self.mode)][0]
         else:
@@ -15,7 +17,8 @@ class SoundCorpus:
         self.decoder = None
         self.encoder = None
         self.len = None
-        self._load_info_dict()
+        if not mode == 'own_test':
+            self._load_info_dict()
 
 
     def _load_info_dict(self):
@@ -25,7 +28,17 @@ class SoundCorpus:
             self.encoder = content['name2id']
             self.len = content['len_' + self.mode]
 
-    def batch_gen(self,batch_size):
+    @staticmethod
+    def _do_mfcc(signal):
+        signal = mfcc(signal, samplerate=16000, winlen=0.025, winstep=0.01, numcep=13,
+                      nfilt=26, nfft=512, lowfreq=0, highfreq=None, preemph=0.97,
+                      ceplifter=22, appendEnergy=True)
+        dsignal = delta(signal, N=1)
+        ddsignal = delta(dsignal, N=1)
+        signal = np.stack([signal, dsignal, ddsignal], axis=2)
+        return signal
+
+    def batch_gen(self,batch_size, do_mfcc = False):
         x = []
         y = []
         with open(self.fp, 'rb') as file:
@@ -33,9 +46,13 @@ class SoundCorpus:
             while True:
                 #try:
                 item = unpickler.load()
+                wav = item['wav']
+                label = item['label']
+                if do_mfcc:
+                    wav = self._do_mfcc(wav)
 
-                x.append(item['wav'])
-                y.append(item['label'])
+                x.append(wav)
+                y.append(label)
 
                 if len(x) == batch_size:
                     # reshape to np arrays
@@ -59,9 +76,11 @@ class BatchGenerator:
         self.upper_bound_noise_mix = 1
         self.portion_unknown = 0.1
         self.portion_silence = 0.1
-        self.portion_noised = 0.5
+        self.portion_noised = 0
         self.noise_unknown = False
         self.noise_silence = True
+
+        self.all_gen = self.batch_gen()
 
     @staticmethod
     def _combine_wav(wav1,wav2,factor_wav1, wav1_is_silence = False):
@@ -122,6 +141,7 @@ class BatchGenerator:
         gen_noise = self.gen_bg()
         gen_unknown = self.gen_unknown()
         gen_silence = self.gen_silence()
+
         while True:
             type = np.random.choice(['known', 'unknown', 'silence'],
                                     p=[1 - self.portion_unknown - self.portion_silence,
@@ -162,7 +182,7 @@ class BatchGenerator:
             noise_wav = noise['wav']
             label = train_data['label']
             factor_mix = np.random.uniform(self.lower_bound_noise_mix,self.upper_bound_noise_mix)
-            if np.random.rand() > self.portion_noised:
+            if np.random.rand() < self.portion_noised:
                 if type is 'silence':
                     if self.noise_silence:
                         wav = self._combine_wav(raw_wav, noise_wav, factor_mix)
@@ -186,3 +206,9 @@ class BatchGenerator:
                 x = []
                 y = []
 
+
+    def _play_next(self,index):
+        x,y = next(self.all_gen)
+        wav = x[index]
+        label = y[index]
+        sd.play(wav, 16000, blocking=True)

@@ -30,7 +30,7 @@ class Analyzer:
 
     def get_label_distribution(self):
         data = self.get_all_data()
-        labels = [d['target'] for d in data]
+        labels = [d['label'] for d in data]
         all_labels = list(set(labels))
         count_dict = {}
         for item in all_labels:
