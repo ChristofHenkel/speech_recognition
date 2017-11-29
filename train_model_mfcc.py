@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class Config:
-    soundcorpus_dir = 'assets/corpora/corpus11/'
+    soundcorpus_dir = 'assets/corpora/corpus12/'
     batch_size = 256
     is_training = True
     use_batch_norm = True
@@ -31,13 +31,13 @@ class Config:
 
 cfg = Config()
 
-corpus = SoundCorpus(cfg.soundcorpus_dir,mode='train')
-valid_corpus = SoundCorpus(cfg.soundcorpus_dir, mode = 'valid')
+corpus = SoundCorpus(cfg.soundcorpus_dir, mode='train')
+valid_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='valid', fn='valid.pm.soundcorpus.p')
 
-bg_corpus = SoundCorpus(cfg.soundcorpus_dir,mode='train', fn = 'background.p.soundcorpus.p')
-unknown_corpus = SoundCorpus(cfg.soundcorpus_dir,mode='train', fn = 'unknown.p.soundcorpus.p')
-silence_corpus = SoundCorpus(cfg.soundcorpus_dir,mode='silence', fn = 'silence.p.soundcorpus.p')
-advanced_gen = BatchGenerator(corpus,bg_corpus,unknown_corpus,silence_corpus, cfg.batch_size)
+bg_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='train', fn='background.p.soundcorpus.p')
+unknown_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='train', fn='unknown.p.soundcorpus.p')
+silence_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='silence', fn='silence.p.soundcorpus.p')
+advanced_gen = BatchGenerator(corpus, bg_corpus, unknown_corpus, silence_corpus, cfg.batch_size)
 
 
 
@@ -178,16 +178,16 @@ def train_model():
 
             s_path = saver.save(sess, cfg.logs_path + model_name)
             print("Model saved in file: %s" % s_path)
-            #val_batch_gen = valid_corpus.batch_gen(2000)
-            #val_batch_x, val_batch_y = next(val_batch_gen)
-            #c_val, acc_val = sess.run([cost, accuracy], feed_dict={x: val_batch_x, y: val_batch_y, keep_prob: 1})
+            val_batch_gen = valid_corpus.batch_gen(2000)
+            val_batch_x, val_batch_y = next(val_batch_gen)
+            c_val, acc_val = sess.run([cost, accuracy], feed_dict={x: val_batch_x, y: val_batch_y, keep_prob: 1})
 
-            #print(c_val, acc_val)
+            print("validation:", c_val, acc_val)
 
         print("Optimization Finished!")
 
 def predict():
-    fn_model = 'models/model6/logs4/model_mfcc_bsize256_e4.ckpt'
+    fn_model = 'models/model0/model_mfcc_bsize256_e4.ckpt'
     # %%
     id2name = corpus.decoder
 
