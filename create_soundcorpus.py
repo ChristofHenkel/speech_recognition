@@ -13,7 +13,10 @@ logging.basicConfig(level=logging.DEBUG)
 class SC_Config:
     def __init__(self, mode='train'):
         self.padding = True
-        self.mfcc = False
+        if mode == "test":
+            self.mfcc = True
+        else:
+            self.mfcc = False
         self.amount_silence = 2000 #number of training data with label silence
         self.pure_silence_portion = 0.5 # How  much silence should be pure silence the rest is sampled from backgroundnoise.
         self.background_silence_portion = 0 # How  much of the resulting data should be silence from background.
@@ -26,7 +29,7 @@ class SC_Config:
         self.data_root = 'assets/'
         self.dir_files = 'train/audio/*/*wav'
         self.validation_list_fp = 'train/validation_list.txt'
-        self.save_dir = self.data_root + 'corpora/corpus11/'
+        self.save_dir = self.data_root + 'corpora/corpus12/'
         self.seed = np.random.seed(1)
         self.paths_test = glob(os.path.join('assets', 'test/audio/*wav'))
         self.dir_noise = 'assets/data_augmentation/silence/background/'
@@ -233,6 +236,8 @@ class SoundCorpusCreator:
         self.config.mode = 'train'
         len_train = self.build_corpus()
         self.config.mode = 'valid'
+        self.config.mfcc = True
+        self.name_flags.append('m')
         len_valid = self.build_corpus()
         return len_train, len_valid
 

@@ -10,23 +10,23 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 class Config:
-    soundcorpus_dir = 'assets/corpora/corpus9/'
+    soundcorpus_dir = 'assets/corpora/corpus12/'
     batch_size = 6
     is_training = False
     use_batch_norm = False
     keep_prob = 1
     display_step = 10
-    logs_path = 'models/model5/logs/'
+    logs_path = 'models/model0/'
 
 
 cfg = Config()
 
-corpus = SoundCorpus(cfg.soundcorpus_dir,mode='test')
+corpus = SoundCorpus(cfg.soundcorpus_dir, mode='test', fn='test.pm.soundcorpus.p')
 
 batch_gen = corpus.batch_gen(cfg.batch_size)
 
 decoder = corpus.decoder
-num_classes=len(decoder)
+num_classes = len(decoder)
 
 model = Model(cfg)
 # set_graph Graph
@@ -70,7 +70,7 @@ with graph.as_default():
     saver = tf.train.Saver()
 
 def submission():
-    fn_model = 'models/model7/logs16/model_mfcc_bsize256_e16.ckpt'
+    fn_model = 'models/model0/model_mfcc_bsize256_e4.ckpt'
     # %%
     id2name = corpus.decoder
     #cfg = Config()
@@ -95,7 +95,7 @@ def submission():
         except EOFError:
             pass
 
-        with open(os.path.join('assets/corpora/corpus10/', 'submission3.csv'), 'w') as fout:
+        with open(os.path.join('assets/corpora/corpus12/', 'submission.csv'), 'w') as fout:
             fout.write('fname,label\n')
             for fname, label in submission.items():
                 fout.write('{},{}\n'.format(fname, label))
