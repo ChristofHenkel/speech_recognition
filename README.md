@@ -20,3 +20,12 @@ creates submission file
 
 ## extras
 analyze_corpus.py
+
+## literature
+
+# Good MFCC explanation:
+http://haythamfayek.com/2016/04/21/speech-processing-for-machine-learning.html
+
+# what we learned
+
+mfcc good for training commands, but overfits instantly on background noise

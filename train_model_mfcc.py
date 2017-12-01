@@ -1,7 +1,3 @@
-"""
-# Good MFCC explanation:
-http://haythamfayek.com/2016/04/21/speech-processing-for-machine-learning.html
-"""
 
 from batch_gen import SoundCorpus, BatchGenerator
 import tensorflow as tf
@@ -44,16 +40,12 @@ cfg = Config()
 corpus = SoundCorpus(cfg.soundcorpus_dir, mode='train')
 valid_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='valid', fn='valid.pm.soundcorpus.p')
 
-bg_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='background', fn='background.p.soundcorpus.p')
+background_noise_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='background', fn='background.p.soundcorpus.p')
 unknown_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='unknown', fn='unknown.p.soundcorpus.p')
 silence_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='silence', fn='silence.p.soundcorpus.p')
 
 batch_parameters = BatchParams()
-advanced_gen = BatchGenerator(corpus, bg_corpus, unknown_corpus, silence_corpus, batch_parameters)
-
-
-
-
+advanced_gen = BatchGenerator(batch_parameters, corpus, background_noise_corpus, unknown_corpus, silence_corpus)
 
 decoder = corpus.decoder
 num_classes=len(decoder)

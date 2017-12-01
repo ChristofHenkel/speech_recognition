@@ -21,6 +21,14 @@ class SoundCorpus:
             self._load_info_dict()
         self.gen = self.__iter__()
 
+    def __iter__(self):
+        with open(self.fp, 'rb') as file:
+            unpickler = pickle.Unpickler(file)
+            while True:
+                #try:
+                item = unpickler.load()
+                yield item
+
     def _load_info_dict(self):
         with open(self.info_dict_fp,'rb') as f:
             content = pickle.load(f)
@@ -31,24 +39,18 @@ class SoundCorpus:
     @staticmethod
     def _do_mfcc(signal):
         signal = mfcc(signal, samplerate=16000, winlen=0.025, winstep=0.01, numcep=13,
-                      nfilt=26, nfft=512, lowfreq=0, highfreq=None, preemph=0,
-                      ceplifter=0, appendEnergy=True)
+                      nfilt=26, nfft=512, lowfreq=0, highfreq=None, preemph=0.97,
+                      ceplifter=22, appendEnergy=True)
         dsignal = delta(signal, N=1)
         ddsignal = delta(dsignal, N=1)
         signal = np.stack([signal, dsignal, ddsignal], axis=2)
         return signal
 
-    def __iter__(self):
-        with open(self.fp, 'rb') as file:
-            unpickler = pickle.Unpickler(file)
-            while True:
-                #try:
-                item = unpickler.load()
-                yield item
+
 
     def _get_len(self):
         size = 0
-        for item in self:
+        for item in self.gen:
             size +=1
         return size
 
@@ -86,7 +88,7 @@ class SoundCorpus:
 
 class BatchGenerator:
 
-    def __init__(self, TrainCorpus, BackgroundCorpus, UnknownCorpus, SilenceCorpus, BatchParams):
+    def __init__(self, BatchParams, TrainCorpus=None, BackgroundCorpus=None, UnknownCorpus=None, SilenceCorpus=None):
         self.batch_size = BatchParams.batch_size
         self.train_corpus = TrainCorpus
         self.background_corpus = BackgroundCorpus
@@ -122,8 +124,8 @@ class BatchGenerator:
     @staticmethod
     def _do_mfcc(signal):
         signal = mfcc(signal, samplerate=16000, winlen=0.025, winstep=0.01, numcep=13,
-                      nfilt=26, nfft=512, lowfreq=0, highfreq=None, preemph=0,
-                      ceplifter=0, appendEnergy=True)
+                      nfilt=26, nfft=512, lowfreq=0, highfreq=None, preemph=0.97,
+                      ceplifter=22, appendEnergy=True)
         dsignal = delta(signal, N=1)
         ddsignal = delta(dsignal, N=1)
         signal = np.stack([signal, dsignal, ddsignal], axis=2)
@@ -238,4 +240,5 @@ class BatchGenerator:
         x,y = next(self.all_gen)
         wav = x[index]
         label = y[index]
+        print(label)
         sd.play(wav, 16000, blocking=True)
