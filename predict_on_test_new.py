@@ -7,11 +7,13 @@ from architectures import Model2 as Model
 import os
 import pickle
 import logging
+from python_speech_features import mfcc, delta
+
 
 logging.basicConfig(level=logging.INFO)
 
 class Config:
-    soundcorpus_dir = 'assets/corpora/corpus11/'
+    soundcorpus_dir = 'assets/corpora/corpus12/'
     batch_size = 287
     is_training = False
     use_batch_norm = False
@@ -24,7 +26,15 @@ cfg = Config()
 silence_corpus = SoundCorpus(cfg.soundcorpus_dir, mode = 'silence')
 test_corpus = SoundCorpus(cfg.soundcorpus_dir,mode='own_test',fn='own_test.p.soundcorpus.p')
 
-batch_gen = test_corpus.batch_gen(287, do_mfcc=True)
+#batch_gen = test_corpus.batch_gen(1, do_mfcc=True)
+batch = []
+try:
+    for item in test_corpus:
+
+        batch.append(item)
+except:
+    pass
+
 
 decoder = silence_corpus.decoder
 encoder = silence_corpus.encoder
@@ -36,6 +46,14 @@ model = Model(cfg)
 batch_size = cfg.batch_size
 is_training = cfg.is_training
 
+def _do_mfcc(signal):
+    signal = mfcc(signal, samplerate=16000, winlen=0.025, winstep=0.01, numcep=13,
+                  nfilt=26, nfft=512, lowfreq=0, highfreq=None, preemph=0,
+                  ceplifter=0, appendEnergy=True)
+    dsignal = delta(signal, N=1)
+    ddsignal = delta(dsignal, N=1)
+    signal = np.stack([signal, dsignal, ddsignal], axis=2)
+    return signal
 
 graph = tf.Graph()
 with graph.as_default():
@@ -69,9 +87,11 @@ with graph.as_default():
 
         tf.summary.scalar('accuracy', accuracy)
     saver = tf.train.Saver()
-
+silence_ids = [id for id,item in enumerate(batch) if sum(abs(item['wav'])) < 16000]
+batch_x = [_do_mfcc(item['wav']) for item in batch]
+batch_y = [item['label'] for item in batch]
 def predict():
-    fn_model = 'models/model4/model_mfcc_bsize256_e49.ckpt'
+    fn_model = 'models/model21/model_mfcc_bsize256_e2.ckpt'
     # %%
 
 
@@ -81,19 +101,13 @@ def predict():
         print("Model restored.")
         submission = dict()
         k_batch = 0
-        try:
-            for (batch_x, batch_y) in batch_gen:
-                if k_batch % 1000 == 0:
-                    logging.info(str(k_batch))
-                predic, cm, acc = sess.run([pred,confusion_matrix, accuracy], feed_dict={x: batch_x, y:batch_y, keep_prob: 1.0})
+        predic, cm, acc = sess.run([pred,confusion_matrix, accuracy], feed_dict={x: batch_x, y:batch_y, keep_prob: 1.0})
 
 
-                print(cm)
-                print('Acc',acc)
-                k_batch += 1
-        except EOFError:
-            print('test')
-            pass
+        print(cm)
+        print('Acc',acc)
+        k_batch += 1
+
     return predic, cm, acc
 
 
@@ -112,9 +126,22 @@ def build_new_test_corpus():
             data.append((label_id,'',root + folder + '/' + fn))
 
     np.random.shuffle(data)
+    portion_unknown = 0.09
+    portion_silence = 0.09
+    new_data = [data[0]]
+    for d in data[1:]:
+        if d[0] == sc_cfg.name2id['unknown']:
+            if len([d for d in new_data if d[0] == sc_cfg.name2id['unknown']])/len(new_data) < portion_unknown:
+                new_data.append(d)
+        elif d[0] == sc_cfg.name2id['silence']:
+            if len([d for d in new_data if d[0] == sc_cfg.name2id['silence']])/len(new_data) < portion_silence:
+                new_data.append(d)
+        else:
+            new_data.append(d)
+    np.random.shuffle(new_data)
     test_corpus = SoundCorpusCreator(sc_cfg)
     corpus = []
-    for d in data:
+    for d in new_data:
         label_id = d[0]
         signal = test_corpus._read_wav_and_pad(d[2]) #rather static function
         corpus.append(dict(label=np.int32(label_id),wav=signal,))

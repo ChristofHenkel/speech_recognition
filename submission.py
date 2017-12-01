@@ -37,6 +37,9 @@ is_training = cfg.is_training
 
 training_iters = corpus.len
 
+
+
+
 graph = tf.Graph()
 with graph.as_default():
     # tf Graph input

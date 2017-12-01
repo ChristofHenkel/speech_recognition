@@ -13,12 +13,9 @@ logging.basicConfig(level=logging.DEBUG)
 class SC_Config:
     def __init__(self, mode='train'):
         self.padding = True
-        if mode == "test":
-            self.mfcc = True
-        else:
-            self.mfcc = False
-        self.amount_silence = 2000 #number of training data with label silence
-        self.pure_silence_portion = 0.5 # How  much silence should be pure silence the rest is sampled from backgroundnoise.
+        self.mfcc = False
+        self.amount_silence = 4000 #number of training data with label silence
+        self.pure_silence_portion = 0 # How  much silence should be pure silence the rest is sampled from backgroundnoise.
         self.background_silence_portion = 0 # How  much of the resulting data should be silence from background.
         self.unknown_portion = 0 # How much should be audio outside the wanted classes.
         self.possible_labels = 'yes no up down left right on off stop go silence unknown'.split()
@@ -34,6 +31,7 @@ class SC_Config:
         self.paths_test = glob(os.path.join('assets', 'test/audio/*wav'))
         self.dir_noise = 'assets/data_augmentation/silence/background/'
         self.L = 16000 # length of files
+        self.noise2noise = True
 
 
 class SoundCorpusCreator:
@@ -167,15 +165,20 @@ class SoundCorpusCreator:
             noise_fns = os.listdir(self.config.dir_noise)
             noise_fns = [fn for fn in noise_fns if fn.endswith('.wav')]
             #append background noise as silence
-            for _ in range(int(self.config.amount_silence * (1-self.config.pure_silence_portion))):
-                fn = self.config.dir_noise + random.choice(noise_fns)
-                data.append((self.config.name2id['silence'], '', fn))
+            np.random.shuffle(noise_fns)
+            end = int(self.config.amount_silence * (1-self.config.pure_silence_portion))
+            for fn in noise_fns[:end]:
+                data.append((self.config.name2id['silence'], '', self.config.dir_noise + fn))
             np.random.shuffle(data)
             # Feel free to add any augmentation
             for (label_id, uid, fname) in data:
                 try:
                     signal = self._read_wav_and_pad(fname)
-
+                    if self.config.noise2noise:
+                        extra_noise = np.random.normal(1, 2, 16000)
+                        volume_change = np.random.uniform(1,10)
+                        signal = signal * extra_noise
+                        signal = signal / volume_change
                     if self.config.mfcc:
                         signal = self._do_mfcc(signal)
 

@@ -13,31 +13,43 @@ import pickle
 import os
 from architectures import Model2 as Model
 logging.basicConfig(level=logging.DEBUG)
-
+from python_speech_features import mfcc, delta
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus12/'
-    batch_size = 256
     is_training = True
     use_batch_norm = True
-    keep_prob = 0.5
+    keep_prob = 1
     max_gradient = 5
-    tf_seed = 4
-    learning_rate = 0.01
+    tf_seed = 3
+    learning_rate = 0.5
     display_step = 10
     epochs = 50
-    epochs_per_save = 5
-    logs_path = 'models/model4/'
+    epochs_per_save = 1
+    logs_path = 'models/model23/'
+
+class BatchParams:
+    batch_size = 256
+    do_mfcc = True # batch will have dims (batch_size, 99, 13, 3)
+    portion_unknown = 0.1
+    portion_silence = 0.05
+    portion_noised = 1
+    lower_bound_noise_mix = 0.5
+    upper_bound_noise_mix = 0.8
+    noise_unknown = False
+    noise_silence = True
 
 cfg = Config()
 
 corpus = SoundCorpus(cfg.soundcorpus_dir, mode='train')
 valid_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='valid', fn='valid.pm.soundcorpus.p')
 
-bg_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='train', fn='background.p.soundcorpus.p')
-unknown_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='train', fn='unknown.p.soundcorpus.p')
+bg_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='background', fn='background.p.soundcorpus.p')
+unknown_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='unknown', fn='unknown.p.soundcorpus.p')
 silence_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='silence', fn='silence.p.soundcorpus.p')
-advanced_gen = BatchGenerator(corpus, bg_corpus, unknown_corpus, silence_corpus, cfg.batch_size)
+
+batch_parameters = BatchParams()
+advanced_gen = BatchGenerator(corpus, bg_corpus, unknown_corpus, silence_corpus, batch_parameters)
 
 
 
@@ -48,7 +60,7 @@ num_classes=len(decoder)
 
 # set_graph Graph
 
-batch_size = cfg.batch_size
+batch_size = batch_parameters.batch_size
 is_training = cfg.is_training
 max_gradient = cfg.max_gradient
 
@@ -164,12 +176,13 @@ def train_model():
                 if step % cfg.display_step == 0:
                     # Calculate batch accuracy
                     logging.info('epoch ' + str(epoch) + ' - step ' + str(step))
-                    logging.info('runtime for batch of ' + str(cfg.batch_size * cfg.display_step) + ' ' + str(time.time()-current_time))
+                    logging.info('runtime for batch of ' + str(batch_size * cfg.display_step) + ' ' + str(time.time()-current_time))
                     current_time = time.time()
                     c, acc, cm= sess.run([cost, accuracy,confusion_matrix], feed_dict={x: batch_x, y: batch_y, keep_prob: cfg.keep_prob})
 
                     print(c, acc)
                     print(cm)
+                    print(advanced_gen.batches_counter)
                 step += 1
                 global_step += 1
             # if epoch % cfg.epochs_per_save == 0:
@@ -178,11 +191,11 @@ def train_model():
 
             s_path = saver.save(sess, cfg.logs_path + model_name)
             print("Model saved in file: %s" % s_path)
-            val_batch_gen = valid_corpus.batch_gen(2000)
-            val_batch_x, val_batch_y = next(val_batch_gen)
-            c_val, acc_val = sess.run([cost, accuracy], feed_dict={x: val_batch_x, y: val_batch_y, keep_prob: 1})
+            #val_batch_gen = valid_corpus.batch_gen(2000)
+            #val_batch_x, val_batch_y = next(val_batch_gen)
+            #c_val, acc_val = sess.run([cost, accuracy], feed_dict={x: val_batch_x, y: val_batch_y, keep_prob: 1})
 
-            print("validation:", c_val, acc_val)
+            #print("validation:", c_val, acc_val)
 
         print("Optimization Finished!")
 

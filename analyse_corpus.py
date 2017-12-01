@@ -35,6 +35,7 @@ class Analyzer:
         count_dict = {}
         for item in all_labels:
             count_dict[item] = labels.count(item)
+            logging.info(count_dict)
         return count_dict
 
     def play_next(self):
@@ -43,8 +44,9 @@ class Analyzer:
         sd.play(wav, self.fs, blocking=True)
 
 
-analyzer = Analyzer('assets/corpora/corpus11/unknown.p.soundcorpus.p')
+logging.basicConfig(level= logging.INFO)
+analyzer = Analyzer('assets/corpora/corpus11/test.p.soundcorpus.p')
 count_dict = analyzer.get_label_distribution()
-print(count_dict)
+
 analyzer.play_next()
 

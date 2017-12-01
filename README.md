@@ -1,12 +1,10 @@
 # speech_recognition
 
-# TODOS
-
-## function for playing part of corpus
-## function for playing batch
 
 
 #Steps
+## download data
+## unzip (issue with 7zip on mac)
 ## run data_augmentation
 creates folder with noise data
 ## create sound corpora
