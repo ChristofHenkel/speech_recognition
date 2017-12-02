@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from scipy.signal import hilbert, chirp
 from python_speech_features import mfcc, logfbank, delta
 import acoustics
-from scipy.signal import butter, lfilter, freqz, fftconvolve
+from scipy.signal import butter, lfilter, freqz, fftconvolve, welch
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -69,14 +69,15 @@ class SilenceDetector:
         return amplitude_envelope
 
     @staticmethod
-    def butter_lowpass(cutoff, fs, order=5):
+    def butter_bandpass(low, high, fs, order=5):
         nyq = 0.5 * fs
-        normal_cutoff = cutoff / nyq
-        b, a = butter(order, normal_cutoff, btype='low', analog=False)
+        low_cutoff = low / nyq
+        high_cutoff = high / nyq
+        b, a = butter(order, [low_cutoff, high_cutoff], btype='band', analog=False)
         return b, a
 
-    def butter_lowpass_filter(self, data, cutoff, fs, order=5):
-        b, a = self.butter_lowpass(cutoff, fs, order=order)
+    def butter_bandpass_filter(self, data, low, high, fs, order=5):
+        b, a = self.butter_bandpass(low, high, fs, order=order)
         y = lfilter(b, a, data)
         return y
 
@@ -109,7 +110,7 @@ class SilenceDetector:
         data = np.sin(1.2 * 2 * np.pi * t) + 1.5 * np.cos(9 * 2 * np.pi * t) + 0.5 * np.sin(12.0 * 2 * np.pi * t)
 
         # Filter the data, and plot both the original and filtered signals.
-        y = self.butter_lowpass_filter(data, cutoff, fs, order)
+        y = self.butter_bandpass_filter(data, cutoff, fs, order)
 
         plt.subplot(2, 1, 2)
         plt.plot(t, data, 'b-', label='data')
@@ -120,8 +121,8 @@ class SilenceDetector:
 
         plt.subplots_adjust(hspace=0.35)
 
-    def apply_low_filtering(self, data, cutoff=8000, order=4, fs=16000, duration=1.0, is_plot=False):
-        y = self.butter_lowpass_filter(data, cutoff, fs, order)
+    def apply_bandpass_filtering(self, data, low_cutoff=80, high_cutoff=1000, order=4, fs=16000, duration=1.0, is_plot=False):
+        y = self.butter_bandpass_filter(data, low_cutoff, high_cutoff, fs, order)
 
         if is_plot:
             samples = int(fs * duration)
@@ -164,7 +165,7 @@ class SilenceDetector:
     def sd_preprocess(self, fname, is_plot):
         signal = self._read_wav_and_pad(fname)
         signal = signal - np.mean(signal)
-        signal = self.apply_low_filtering(signal, is_plot=is_plot)
+        signal = self.apply_bandpass_filtering(signal, is_plot=is_plot)
         return signal
 
     def sd_amplitude_envelop(self, signal, threshold, is_plot):
@@ -175,19 +176,24 @@ class SilenceDetector:
     def sd_autocorrelation(self, signal, threshold):
         white_noise = np.array(((acoustics.generator.noise(16000*60, color='white'))/3) * 32767).astype(np.int16)
         pink_noise = np.array(((acoustics.generator.noise(16000*60, color='pink'))/3) * 32767).astype(np.int16)
-        #a = np.correlate(signal, pink_noise_model[:len(signal)], "same")
-        #a = signal.fftconvolve(sig, sig[::-1], mode='full')
         signal_acorr = self.autocorrelation(signal)
-        plt.figure()
-        plt.plot(signal_acorr)
-        print(signal_acorr)
+        # plt.figure()
+        # plt.plot(signal_acorr)
+        # print(signal_acorr)
         signal_acorr = self.apply_threshold(np.abs(signal_acorr[1:]), threshold)
         return signal_acorr
 
     def silence_detection(self, fname, threshold_db=4.0,  threshold_acorr=0.1, is_plot=False):
         signal = self.sd_preprocess(fname, is_plot)
+        f, Pxx_spec = welch(signal, 16000, 'flattop', 1024, scaling='spectrum')
+        # plt.figure()
+        # plt.semilogy(f, np.sqrt(Pxx_spec))
+        # plt.xlabel('frequency [Hz]')
+        # plt.ylabel('Linear spectrum [V RMS]')
+        # plt.title(os.path.basename(fname))
+
         n = int(16000 * 0.2)
-        #print(self.running_mean(signal, n))
+        print(self.running_mean(signal, n))
         signal_amplitude = self.sd_amplitude_envelop(signal, threshold_db, is_plot)
         signal_acorr = self.sd_autocorrelation(signal, threshold_acorr)
         if is_plot:
@@ -207,15 +213,16 @@ class SilenceDetector:
         ts_fnames = glob.glob(test_sil_pathnames)
         threshold_db = 6
         threshold_acorr = 0.1
-        for fnames in bn_fnames[-3:-2]:
-            result = self.silence_detection(fnames, threshold_db=threshold_db, threshold_acorr=threshold_acorr)
-            print(os.path.basename(fnames), result)
-        # for fnames in dg_fnames[0:1]:
+        for fname in bn_fnames:
+            result = self.silence_detection(fname, threshold_db=threshold_db, threshold_acorr=threshold_acorr)
+            print(os.path.basename(fname), result)
+
+        # for fnames in dg_fnames[0:3]:
         #     result = self.silence_detection(fnames, threshold_db=threshold_db, threshold_acorr=threshold_acorr)
         #     print(os.path.basename(fnames), result)
 
 
-        plt.show()
+        #plt.show()
 
 if __name__ == "__main__":
     SC = SilenceDetector()
