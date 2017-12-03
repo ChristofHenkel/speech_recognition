@@ -2,12 +2,21 @@
 
 # Introduction
 
-As part of kaggle competition
+As part of kaggle competition (https://www.kaggle.com/c/tensorflow-speech-recognition-challenge)
 
-Link to Tensorflow tutorial
+
 
 #Steps
-## download data
+
+1. Download training and test data
+2. run data_augmentation to generate background noise
+3. create soundcorpora containing raw wav content and labels
+4. start training
+5. populate submission.csv
+
+
+
+## download training and test data
 
 ### Training Data
 https://www.kaggle.com/c/tensorflow-speech-recognition-challenge/download/train.7z
@@ -18,14 +27,42 @@ https://www.kaggle.com/c/tensorflow-speech-recognition-challenge/download/test.7
 ### Sample Submission
 https://www.kaggle.com/c/tensorflow-speech-recognition-challenge/download/sample_submission.7z
 
+### unzip the selected data
+There is a kwnon issue on OSX. Use Keka www.kekaosx.com or cmd-line using brew:
+`$ brew update`
+`$ brew install p7zip`
+`$ 7z x train.7z`
 
-## unzip (issue with 7zip on mac)
 ## run data_augmentation
-creates folder with noise data
+Since all training ans test wav files have length of 1 second, we also want to split the long wav files containing background noise
+into 1 second snippets.
+Run `data_augmentation.py` to generate a folder containing those snippets.
+
+
 ## create sound corpora
-running 'create_soundcorpus.py' will create 6 different soundcorpora and an info_dictonary
+Since the structure of training, validation, test, background noise etc. is quite sparse we capture all relevant information in
+seperate soundcorpus files containing the wav as numpy arrays and the according labels. Soundcorpora are saved in a way that we can stream
+data from them for training and on-the-fly noise mixing.
+
+Running 'create_soundcorpus.py' will create different soundcorpora and an info_dictonary containing the length of each
+soundcorpus. We create corpora for:
+*   train
+*   valid
+*   test
+*   background
+*   unknown
+*   silence
 
 ## start training with specific batch composition, model architecture and model hparams
+
+### important classes and scripts
+###   BatchGen
+
+
+
+###  Model
+
+
 
 ## submission
 submission.py
@@ -38,9 +75,10 @@ analyze_corpus.py
 
 ## literature
 
-# Good MFCC explanation:
-http://haythamfayek.com/2016/04/21/speech-processing-for-machine-learning.html
+* Good MFCC explanation: http://haythamfayek.com/2016/04/21/speech-processing-for-machine-learning.html
+* Tensorflow tutorial on speech recognition: https://www.tensorflow.org/versions/master/tutorials/audio_recognition
 
-# what we learned
+## what we learned so far
 
-mfcc good for training commands, but overfits instantly on background noise
+* mfcc good for training commands, but overfits instantly on background noise
+* since silence ( meaning non-speech sound ) is quite different from the othe rlabels, it might be best to handle it seperately

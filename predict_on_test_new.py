@@ -9,7 +9,7 @@ import pickle
 import logging
 from python_speech_features import mfcc, delta
 from input_features import stacked_mfcc
-from silence_detection import SilenceClassifier
+from silence_detection import SilenceDetector
 
 
 logging.basicConfig(level=logging.INFO)
@@ -21,12 +21,10 @@ class Config:
     keep_prob = 1
     display_step = 10
 
-
-
 cfg = Config()
 silence_corpus = SoundCorpus(cfg.soundcorpus_dir, mode = 'silence')
 test_corpus = SoundCorpus(cfg.soundcorpus_dir,mode='own_test',fn='own_test.p.soundcorpus.p')
-silence_classifier = SilenceClassifier()
+silence_classifier = SilenceDetector()
 #batch = []
 try:
     batch = [item for item in test_corpus]

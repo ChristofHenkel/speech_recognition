@@ -5,6 +5,8 @@ import webrtcvad
 import struct
 from scipy.io import wavfile
 import logging
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 from scipy.signal import hilbert, chirp
 import acoustics

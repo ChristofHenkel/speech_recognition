@@ -6,7 +6,8 @@ from architectures import Model2 as Model
 import os
 import pickle
 import logging
-
+from silence_detection import SilenceDetector
+from input_features import stacked_mfcc
 logging.basicConfig(level=logging.INFO)
 
 class Config:
@@ -21,12 +22,12 @@ class Config:
 
 cfg = Config()
 
-corpus = SoundCorpus(cfg.soundcorpus_dir, mode='test', fn='test.pm.soundcorpus.p')
-
+corpus = SoundCorpus(cfg.soundcorpus_dir, mode='test', fn='test.p.soundcorpus.p')
+SC = SilenceDetector()
 batch_gen = corpus.batch_gen(cfg.batch_size)
 
 decoder = corpus.decoder
-num_classes = len(decoder)
+num_classes = len(decoder) -1
 
 model = Model(cfg)
 # set_graph Graph
@@ -73,32 +74,40 @@ with graph.as_default():
     saver = tf.train.Saver()
 
 def submission():
-    fn_model = 'models/model0/model_mfcc_bsize256_e4.ckpt'
+    fn_model = 'models/model30/model_mfcc_bsize256_e9.ckpt'
     # %%
     id2name = corpus.decoder
     #cfg = Config()
     # cfg.soundcorpus_fp = 'assets/corpora/corpus7/test.pm.soundcorpus.p'
     size = 158538
 
+    submission = dict()
+
     with tf.Session(graph=graph) as sess:
         # Restore variables from disk.
         saver.restore(sess, fn_model)
         print("Model restored.")
-        submission = dict()
+
         k_batch = 0
         try:
             for (batch_x, batch_y) in batch_gen:
+
+                batch_x2 = [stacked_mfcc(b) for b in batch_x]
+
                 if k_batch % 1000 == 0:
                     logging.info(str(k_batch))
-                prediction = sess.run([pred], feed_dict={x: batch_x, keep_prob: 1.0})
+                prediction = sess.run([pred], feed_dict={x: batch_x2, keep_prob: 1.0})
                 for k,p in enumerate(prediction[0]):
-                    fname, label = batch_y[k].decode(), id2name[p]
+                    if SC.is_silence(batch_x[k]):
+                        fname, label = batch_y[k].decode(), 'silence'
+                    else:
+                        fname, label = batch_y[k].decode(), id2name[p]
                     submission[fname] = label
                 k_batch += 1
         except EOFError:
             pass
 
-        with open(os.path.join('assets/corpora/corpus12/', 'submission.csv'), 'w') as fout:
+        with open(os.path.join('assets/corpora/corpus12/', 'submission_test.csv'), 'w') as fout:
             fout.write('fname,label\n')
             for fname, label in submission.items():
                 fout.write('{},{}\n'.format(fname, label))
