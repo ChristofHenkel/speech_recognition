@@ -11,7 +11,7 @@ from scipy.signal import butter, lfilter, freqz, fftconvolve, welch
 from statsmodels.tsa.stattools import acf
 from sklearn.preprocessing import normalize
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
 class SilenceDetector:
@@ -272,7 +272,7 @@ class SilenceDetector:
         ps_fname = "/Users/maureen/Documents/Work/kaggle/assets/data_augmentation/silence/pure_silence.wav"
         bn_pathnames = "/Users/maureen/Documents/Work/kaggle/assets/train/audio/_background_noise_/*.wav"
         dg_pathnames = "/Users/maureen/Documents/Work/kaggle/assets/train" \
-                       "/audio/bed/*.wav"
+                       "/audio/dog/*.wav"
         test_sil_pathnames = "/Users/maureen/Documents/Work/kaggle_additional_data/label/silence/*.wav"
         bn_fnames = glob.glob(bn_pathnames)
         dg_fnames = glob.glob(dg_pathnames)
@@ -289,14 +289,16 @@ class SilenceDetector:
         #     logging.log(logging.DEBUG, "File:" + os.path.basename(fname) +
         #                 "--" + str(result))
 
-        for fname in ts_fnames:
+        acc = 0
+        for fname in dg_fnames:
             result = self.silence_detection(fname,
                                             threshold_db=thres_db,
                                             threshold_acorr=thres_acorr,
                                             threshold_zero_crossing=thres_zero_crossing)
-            #print(os.path.basename(fnames), result)
             logging.log(logging.DEBUG, "File:" + os.path.basename(fname) +
                         "--" + str(result))
+            acc += result
+        print(1-(acc / len(dg_fnames)))
         plt.show()
 
 
