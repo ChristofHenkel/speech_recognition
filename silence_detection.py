@@ -274,23 +274,21 @@ class SilenceDetector:
         dg_pathnames = "/Users/maureen/Documents/Work/kaggle/assets/train" \
                        "/audio/dog/*.wav"
         test_sil_pathnames = "/Users/maureen/Documents/Work/kaggle_additional_data/label/silence/*.wav"
+        test_all_pathnames = \
+            "/Users/maureen/Documents/Work/kaggle_additional_data/label/*/*.wav"
         bn_fnames = glob.glob(bn_pathnames)
         dg_fnames = glob.glob(dg_pathnames)
-        ts_fnames = glob.glob(test_sil_pathnames)
+        ts_sil_fnames = glob.glob(test_sil_pathnames)
+        sil_dir = "/Users/maureen/Documents/Work/kaggle_additional_data/label/silence/"
+        ts_no_sil_fnames = [x for x in glob.glob(test_all_pathnames) if
+                         os.path.dirname(x) is not sil_dir]
         thres_db = 3
         thres_acorr = 0.3
         thres_zero_crossing = 0.3
-        # for fname in ts_fnames:
-        #
-        #     result = self.silence_detection(fname, threshold_db=thres_db,
-        #                                     threshold_acorr=thres_acorr,
-        #                                     threshold_zero_crossing=thres_zero_crossing)
-        #     #print(os.path.basename(fname), result)
-        #     logging.log(logging.DEBUG, "File:" + os.path.basename(fname) +
-        #                 "--" + str(result))
-
         acc = 0
-        for fname in dg_fnames:
+
+        ### Silence
+        for fname in ts_sil_fnames:
             result = self.silence_detection(fname,
                                             threshold_db=thres_db,
                                             threshold_acorr=thres_acorr,
@@ -298,7 +296,19 @@ class SilenceDetector:
             logging.log(logging.DEBUG, "File:" + os.path.basename(fname) +
                         "--" + str(result))
             acc += result
-        print(1-(acc / len(dg_fnames)))
+        print("Accuracy - silence:", acc / len(ts_sil_fnames))
+
+        ### Speech
+        acc = 0
+        for fname in ts_no_sil_fnames:
+            result = self.silence_detection(fname,
+                                            threshold_db=thres_db,
+                                            threshold_acorr=thres_acorr,
+                                            threshold_zero_crossing=thres_zero_crossing)
+            logging.log(logging.DEBUG, "File:" + os.path.basename(fname) +
+                        "--" + str(result))
+            acc += result
+        print("Accuracy - speech:", 1-(acc / len(ts_no_sil_fnames)))
         plt.show()
 
 
