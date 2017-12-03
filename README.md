@@ -1,9 +1,24 @@
 # speech_recognition
 
+# Introduction
 
+As part of kaggle competition
+
+Link to Tensorflow tutorial
 
 #Steps
 ## download data
+
+### Training Data
+https://www.kaggle.com/c/tensorflow-speech-recognition-challenge/download/train.7z
+
+### Test Data
+https://www.kaggle.com/c/tensorflow-speech-recognition-challenge/download/test.7z
+
+### Sample Submission
+https://www.kaggle.com/c/tensorflow-speech-recognition-challenge/download/sample_submission.7z
+
+
 ## unzip (issue with 7zip on mac)
 ## run data_augmentation
 creates folder with noise data

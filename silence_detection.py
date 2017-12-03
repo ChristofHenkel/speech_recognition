@@ -1,15 +1,17 @@
 import glob
 import os
 import numpy as np
+import webrtcvad
+import struct
 from scipy.io import wavfile
 import logging
 import matplotlib.pyplot as plt
 from scipy.signal import hilbert, chirp
-from python_speech_features import mfcc, logfbank, delta
 import acoustics
 from scipy.signal import butter, lfilter, freqz, fftconvolve, welch
 from statsmodels.tsa.stattools import acf
 from sklearn.preprocessing import normalize
+from input_features import stacked_mfcc
 
 logging.basicConfig(level=logging.INFO)
 
@@ -23,6 +25,13 @@ class SilenceDetector:
         self.white_noise = None
         self.pink_noise = None
 
+        # any configuration parameters
+        self.vad_mode = 1 # set aggressiveness from 0 to 3
+        self.speech_portion_threshold=0.3
+        self.window_duration=0.03
+        self.vad = webrtcvad.Vad()
+        self.vad.set_mode(self.vad_mode)
+
     def config(self):
         self.white_noise = np.array((
             (acoustics.generator.noise(16000 * 60, color='white')) / 3) *
@@ -31,17 +40,6 @@ class SilenceDetector:
            (acoustics.generator.noise(16000 * 60, color='pink')) / 3) *
                                    32767).astype(np.int16)
 
-    @staticmethod
-    def _do_mfcc(signal):
-        signal = mfcc(signal, samplerate=16000, winlen=0.025, winstep=0.01,
-                      numcep=13,
-                      nfilt=26, nfft=512, lowfreq=0, highfreq=None,
-                      preemph=0.97,
-                      ceplifter=22, appendEnergy=True)
-        dsignal = delta(signal, N=1)
-        ddsignal = delta(dsignal, N=1)
-        signal = np.stack([signal, dsignal, ddsignal], axis=2)
-        return signal
 
     def _read_wav_and_pad(self, fname):
         _, wav = wavfile.read(fname)
@@ -311,8 +309,53 @@ class SilenceDetector:
         print("Accuracy - speech:", 1-(acc / len(ts_no_sil_fnames)))
         plt.show()
 
+    def is_silence(self,wav):
+
+        raw_samples = struct.pack("%dh" % len(wav), *wav)
+        samples_per_window = int(self.window_duration * 16000 + 0.5)
+        bytes_per_sample = 2
+        speech_analysis = []
+        for start in np.arange(0, len(wav), samples_per_window):
+            stop = min(start + samples_per_window, len(wav))
+            is_speech = self.vad.is_speech(raw_samples[start * bytes_per_sample: stop * bytes_per_sample],
+                                      sample_rate=16000)
+            speech_analysis.append(is_speech)
+
+        speech_port = speech_analysis.count(True) / len(speech_analysis)
+        return speech_port < self.speech_portion_threshold
+
+    def test_acc_on_corpus(self, test_corpus):
+        try:
+            batch = [item for item in test_corpus]
+        # for item in test_corpus:
+        #        batch.append(item)
+        except:
+            batch = []
+            pass
+
+        true_silence_ids = [id for id, item in enumerate(batch) if item['label'] == 11]
+        true_not_silence_ids = [id for id,item in enumerate(batch) if item['label'] != 11]
+        predicted_silence_ids = [id for id, item in enumerate(batch) if self.is_silence(item['wav'])]
+
+        acc_on_silent = len([id for id in predicted_silence_ids if id in true_silence_ids])/len(true_silence_ids)
+        acc_on_nonsilent = 1-len([id for id in predicted_silence_ids if id in true_not_silence_ids])/len(true_not_silence_ids)
+
+        true_prediction = [ item['label']== 11 for item in batch]
+        prediction = [self.is_silence(item['wav']) for item in batch]
+        correct_prediction = [true_prediction[id] == prediction[id] for id, _ in enumerate(batch)]
+        correct_prediction.count(True)/len(batch)
+        acc_total = correct_prediction.count(True)/len(batch)
+
+        print('acc_on_silent %s' %acc_on_silent)
+        print('acc_on_nonsilent %s' % acc_on_nonsilent)
+        print('acc_total %s' % acc_total)
+
 
 if __name__ == "__main__":
     SC = SilenceDetector()
     SC.testcase()
     # SC.demo_lf()
+    from batch_gen import SoundCorpus
+
+    test_corpus = SoundCorpus('assets/corpora/corpus12/', mode='own_test', fn='own_test.p.soundcorpus.p')
+    SC.test_acc(test_corpus)
