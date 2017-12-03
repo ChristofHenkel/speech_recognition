@@ -8,13 +8,14 @@ import os
 import pickle
 import logging
 from python_speech_features import mfcc, delta
+from input_features import stacked_mfcc
+from silence_detection import SilenceClassifier
 
 
 logging.basicConfig(level=logging.INFO)
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus12/'
-    batch_size = 287
     is_training = False
     use_batch_norm = False
     keep_prob = 1
@@ -25,35 +26,28 @@ class Config:
 cfg = Config()
 silence_corpus = SoundCorpus(cfg.soundcorpus_dir, mode = 'silence')
 test_corpus = SoundCorpus(cfg.soundcorpus_dir,mode='own_test',fn='own_test.p.soundcorpus.p')
-
-#batch_gen = test_corpus.batch_gen(1, do_mfcc=True)
-batch = []
+silence_classifier = SilenceClassifier()
+#batch = []
 try:
-    for item in test_corpus:
-
-        batch.append(item)
+    batch = [item for item in test_corpus]
+#    for item in test_corpus:
+#        batch.append(item)
 except:
+    batch = []
     pass
 
 
 decoder = silence_corpus.decoder
 encoder = silence_corpus.encoder
-num_classes=len(decoder)
+num_classes=len(decoder) - 1
 
 model = Model(cfg)
 # set_graph Graph
 
-batch_size = cfg.batch_size
+# batch_size = cfg.batch_size
 is_training = cfg.is_training
 
-def _do_mfcc(signal):
-    signal = mfcc(signal, samplerate=16000, winlen=0.025, winstep=0.01, numcep=13,
-                  nfilt=26, nfft=512, lowfreq=0, highfreq=None, preemph=0,
-                  ceplifter=0, appendEnergy=True)
-    dsignal = delta(signal, N=1)
-    ddsignal = delta(dsignal, N=1)
-    signal = np.stack([signal, dsignal, ddsignal], axis=2)
-    return signal
+
 
 graph = tf.Graph()
 with graph.as_default():
@@ -87,11 +81,36 @@ with graph.as_default():
 
         tf.summary.scalar('accuracy', accuracy)
     saver = tf.train.Saver()
-silence_ids = [id for id,item in enumerate(batch) if sum(abs(item['wav'])) < 16000]
-batch_x = [_do_mfcc(item['wav']) for item in batch]
-batch_y = [item['label'] for item in batch]
-def predict():
-    fn_model = 'models/model21/model_mfcc_bsize256_e2.ckpt'
+
+
+
+
+true_silence_ids = [id for id,item in enumerate(batch) if item['label'] == 11]
+silence_ids = [id for id,item in enumerate(batch) if silence_classifier.is_silence(item['wav'])]
+
+batch2 = [b for id, b in enumerate(batch) if id not in true_silence_ids]
+batch_x = [stacked_mfcc(item['wav']) for item in batch2]
+batch_y = [item['label'] for item in batch2]
+
+
+
+
+
+
+
+
+#not_silence_ids = [id for id,item in enumerate(batch) if item['label'] != 11]
+
+#x_true = [b['wav'] for b in batch if b['label'] == 11]
+#x_false = [b['wav'] for b in batch if b['label'] != 11]
+#acc1 = len([x for x in x_true if is_silence(x)])/len(x_true)
+#acc2 = len([x for x in x_false if not is_silence(x)])/len(x_false)
+#acc3 = acc1*0.09 + acc2*0.91
+#print('acc1 %s  acc2 %s total %s' % (acc1,acc2,acc3))
+
+
+def predict(batch_x,batch_y):
+    fn_model = 'models/model30/model_mfcc_bsize256_e9.ckpt'
     # %%
 
 
@@ -99,7 +118,6 @@ def predict():
         # Restore variables from disk.
         saver.restore(sess, fn_model)
         print("Model restored.")
-        submission = dict()
         k_batch = 0
         predic, cm, acc = sess.run([pred,confusion_matrix, accuracy], feed_dict={x: batch_x, y:batch_y, keep_prob: 1.0})
 
@@ -161,7 +179,7 @@ def build_new_test_corpus():
     #  display dict
 #if __name__ == '__main__':
 
-prediction, cm, acc = predict()
+prediction, cm, acc = predict(batch_x,batch_y)
 
 acc_dict = {}
 for c in range(num_classes):
@@ -169,7 +187,8 @@ for c in range(num_classes):
     acc_dict[decoder[c]] = acc_id
 
 
-print(sum([cm[i,i] for i in range(num_classes-1)])/sum(sum(cm[:-1,:-1])))
+print(sum([cm[i,i] for i in range(num_classes)])/sum(sum(cm)))
+print(' ')
 for item in acc_dict:
     print(item,acc_dict[item])
 

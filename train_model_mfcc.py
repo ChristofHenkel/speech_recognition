@@ -9,7 +9,6 @@ import pickle
 import os
 from architectures import Model2 as Model
 logging.basicConfig(level=logging.DEBUG)
-from python_speech_features import mfcc, delta
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus12/'
@@ -17,38 +16,43 @@ class Config:
     use_batch_norm = True
     keep_prob = 1
     max_gradient = 5
-    tf_seed = 3
-    learning_rate = 0.5
+    tf_seed = 2
+    learning_rate = 1
+    lr_decay_rate = 0.8
+    lr_change_steps = 100
     display_step = 10
-    epochs = 50
+    display_step_val = 50
+    epochs = 20
     epochs_per_save = 1
-    logs_path = 'models/model23/'
+    logs_path = 'models/model32/'
 
 class BatchParams:
-    batch_size = 256
+    batch_size = 512
     do_mfcc = True # batch will have dims (batch_size, 99, 13, 3)
-    portion_unknown = 0.1
-    portion_silence = 0.05
+    portion_unknown = 0.15
+    portion_silence = 0
     portion_noised = 1
     lower_bound_noise_mix = 0.5
-    upper_bound_noise_mix = 0.8
+    upper_bound_noise_mix = 1
     noise_unknown = False
     noise_silence = True
 
 cfg = Config()
 
 corpus = SoundCorpus(cfg.soundcorpus_dir, mode='train')
-valid_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='valid', fn='valid.pm.soundcorpus.p')
-
+valid_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='valid', fn='valid.p.soundcorpus.p')
+len_valid = valid_corpus._get_len()
 background_noise_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='background', fn='background.p.soundcorpus.p')
 unknown_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='unknown', fn='unknown.p.soundcorpus.p')
 silence_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='silence', fn='silence.p.soundcorpus.p')
 
 batch_parameters = BatchParams()
-advanced_gen = BatchGenerator(batch_parameters, corpus, background_noise_corpus, unknown_corpus, silence_corpus)
+advanced_gen = BatchGenerator(batch_parameters, corpus, background_noise_corpus, unknown_corpus, SilenceCorpus=None)
 
+encoder = corpus.encoder
 decoder = corpus.decoder
-num_classes=len(decoder)
+
+num_classes=len(decoder)-1
 
 # set_graph Graph
 
@@ -97,16 +101,30 @@ with graph.as_default():
             tf.summary.scalar(corpus.decoder[i], acc_id)
 
 
-    # train ops
-    gradients, _ = tf.clip_by_global_norm(tf.gradients(cost, tf.trainable_variables()),
-                                          max_gradient, name="clip_gradients")
-    iteration = tf.Variable(0, dtype=tf.int64, name="iteration", trainable=False)
 
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=cfg.learning_rate).apply_gradients(
+    # train ops
+    raw_gradients = tf.gradients(cost, tf.trainable_variables())
+    gradnorm = tf.global_norm(raw_gradients)
+    tf.summary.scalar('grad_norm', gradnorm)
+    gradients, _ = tf.clip_by_global_norm(raw_gradients,
+                                          max_gradient, name="clip_gradients")
+    gradnorm_clipped = tf.global_norm(gradients)
+    tf.summary.scalar('grad_norm_clipped', gradnorm_clipped)
+    iteration = tf.Variable(0, dtype=tf.int64, name="iteration", trainable=False)
+    lr_ = tf.Variable(cfg.learning_rate, dtype=tf.float64, name="lr_", trainable=False)
+    decay = tf.Variable(0.95, dtype=tf.float64, name="decay", trainable=False)
+    steps_ = tf.Variable(100, dtype=tf.int64, name="setps_", trainable=False)
+    lr = tf.train.exponential_decay(lr_, iteration,steps_, decay, staircase=True)
+    tf.summary.scalar('learning_rate', lr)
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=lr).apply_gradients(
         zip(gradients, tf.trainable_variables()),
         name="train_step",
         global_step=iteration)
 
+
+
+    #grad_norm_summary = summaryOps.scalarSummary('squared L2-norm of the gradient', Grad_norm)
+    #self.train_writer.add_summary(grad_norm_summary, iteration)
 
     #pred = tf.argmax(logits, axis=-1)
     #correct_pred = tf.equal(pred, tf.reshape(y, [-1]))
@@ -129,7 +147,7 @@ def debug_model():
         cm,l, acc, pred_,y_, id1_ = sess.run([confusion_matrix,logits,accuracy,pred,y,id1], feed_dict={x: batch_x, y: batch_y, keep_prob: cfg.keep_prob})
         print(cm)
         print(l, acc)
-        return cm, l, acc,pred_,y_, id1_
+        return (cm, l, acc,pred_,y_, id1_)
 
 def aggregate_y(batch_y):
     knowns = [id for id in batch_y if id in [0,1,2,3,4,5,6,7,8,9]]
@@ -145,7 +163,8 @@ def train_model():
     with tf.Session(graph=graph) as sess:
         logging.info('Start training')
         init = tf.global_variables_initializer()
-        train_writer = tf.summary.FileWriter(cfg.logs_path, graph=graph)
+        train_writer = tf.summary.FileWriter(cfg.logs_path + 'train/', graph=graph)
+        valid_writer = tf.summary.FileWriter(cfg.logs_path + 'valid/')
         sess.run(init)
         global_step = 0
 
@@ -167,7 +186,7 @@ def train_model():
                 train_writer.add_summary(summary_, global_step)
                 if step % cfg.display_step == 0:
                     # Calculate batch accuracy
-                    logging.info('epoch ' + str(epoch) + ' - step ' + str(step))
+                    logging.info('epoch %s - step %s' % (epoch,step))
                     logging.info('runtime for batch of ' + str(batch_size * cfg.display_step) + ' ' + str(time.time()-current_time))
                     current_time = time.time()
                     c, acc, cm= sess.run([cost, accuracy,confusion_matrix], feed_dict={x: batch_x, y: batch_y, keep_prob: cfg.keep_prob})
@@ -175,6 +194,15 @@ def train_model():
                     print(c, acc)
                     print(cm)
                     print(advanced_gen.batches_counter)
+
+                if global_step % cfg.display_step_val == 0:
+                    val_batch_gen = valid_corpus.batch_gen(len_valid, do_mfcc=True)
+                    val_batch_x, val_batch_y = next(val_batch_gen)
+                    summary_val, c_val, acc_val = sess.run([summaries, cost, accuracy],
+                                                           feed_dict={x: val_batch_x, y: val_batch_y, keep_prob: 1})
+                    valid_writer.add_summary(summary_val, global_step)
+                    print("validation:", c_val, acc_val)
+
                 step += 1
                 global_step += 1
             # if epoch % cfg.epochs_per_save == 0:
@@ -183,11 +211,7 @@ def train_model():
 
             s_path = saver.save(sess, cfg.logs_path + model_name)
             print("Model saved in file: %s" % s_path)
-            #val_batch_gen = valid_corpus.batch_gen(2000)
-            #val_batch_x, val_batch_y = next(val_batch_gen)
-            #c_val, acc_val = sess.run([cost, accuracy], feed_dict={x: val_batch_x, y: val_batch_y, keep_prob: 1})
 
-            #print("validation:", c_val, acc_val)
 
         print("Optimization Finished!")
 
@@ -218,6 +242,6 @@ def predict():
             pass
 
 if __name__ == '__main__':
-    #cm, l, acc, pred_,y_, id1_ = debug_model()
+    #res = debug_model()
     train_model()
 

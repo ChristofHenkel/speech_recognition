@@ -18,7 +18,7 @@ class SC_Config:
         self.pure_silence_portion = 0 # How  much silence should be pure silence the rest is sampled from backgroundnoise.
         self.background_silence_portion = 0 # How  much of the resulting data should be silence from background.
         self.unknown_portion = 0 # How much should be audio outside the wanted classes.
-        self.possible_labels = 'yes no up down left right on off stop go silence unknown'.split()
+        self.possible_labels = 'yes no up down left right on off stop go unknown silence'.split()
         self.id2name = {i: name for i, name in enumerate(self.possible_labels)}
         self.name2id = {name: i for i, name in self.id2name.items()}
         self.mode = mode
@@ -239,8 +239,6 @@ class SoundCorpusCreator:
         self.config.mode = 'train'
         len_train = self.build_corpus()
         self.config.mode = 'valid'
-        self.config.mfcc = True
-        self.name_flags.append('m')
         len_valid = self.build_corpus()
         return len_train, len_valid
 

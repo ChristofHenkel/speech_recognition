@@ -3,6 +3,7 @@ import pickle
 import numpy as np
 from python_speech_features import mfcc, delta
 import sounddevice as sd
+from input_features import stacked_mfcc
 
 class SoundCorpus:
 
@@ -25,9 +26,11 @@ class SoundCorpus:
         with open(self.fp, 'rb') as file:
             unpickler = pickle.Unpickler(file)
             while True:
-                #try:
-                item = unpickler.load()
-                yield item
+                try:
+                    item = unpickler.load()
+                    yield item
+                except EOFError:
+                    break
 
     def _load_info_dict(self):
         with open(self.info_dict_fp,'rb') as f:
@@ -36,21 +39,9 @@ class SoundCorpus:
             self.encoder = content['name2id']
             self.len = content['len_' + self.mode]
 
-    @staticmethod
-    def _do_mfcc(signal):
-        signal = mfcc(signal, samplerate=16000, winlen=0.025, winstep=0.01, numcep=13,
-                      nfilt=26, nfft=512, lowfreq=0, highfreq=None, preemph=0.97,
-                      ceplifter=22, appendEnergy=True)
-        dsignal = delta(signal, N=1)
-        ddsignal = delta(dsignal, N=1)
-        signal = np.stack([signal, dsignal, ddsignal], axis=2)
-        return signal
-
-
-
     def _get_len(self):
         size = 0
-        for item in self.gen:
+        for _ in self.gen:
             size +=1
         return size
 
@@ -71,7 +62,7 @@ class SoundCorpus:
                 wav = item['wav']
                 label = item['label']
                 if do_mfcc:
-                    wav = self._do_mfcc(wav)
+                    wav = stacked_mfcc(wav)
 
                 x.append(wav)
                 y.append(label)
@@ -109,7 +100,7 @@ class BatchGenerator:
 
     @staticmethod
     def _combine_wav(wav1,wav2,factor_wav1, wav1_is_silence = False):
-        if  wav1_is_silence:
+        if wav1_is_silence:
             combined_wav = wav1 + factor_wav1 * wav2
         else:
             try:
@@ -121,16 +112,14 @@ class BatchGenerator:
                 combined_wav = wav1
         return combined_wav
 
-    @staticmethod
-    def _do_mfcc(signal):
-        signal = mfcc(signal, samplerate=16000, winlen=0.025, winstep=0.01, numcep=13,
-                      nfilt=26, nfft=512, lowfreq=0, highfreq=None, preemph=0.97,
-                      ceplifter=22, appendEnergy=True)
-        dsignal = delta(signal, N=1)
-        ddsignal = delta(dsignal, N=1)
-        signal = np.stack([signal, dsignal, ddsignal], axis=2)
-        return signal
+    def gen_corpus(self,fp):
+        with open(fp, 'rb') as f:
+            unpickler = pickle.Unpickler(f)
+            while True:
+                data = unpickler.load()
+                yield data
 
+    # to be deleted
     def gen_train(self):
         with open(self.train_corpus.fp, 'rb') as f:
             unpickler = pickle.Unpickler(f)
@@ -138,6 +127,7 @@ class BatchGenerator:
                 data = unpickler.load()
                 yield data
 
+    # to be deleted
     def gen_bg(self):
         with open(self.background_corpus.fp, 'rb') as f:
             unpickler = pickle.Unpickler(f)
@@ -145,6 +135,7 @@ class BatchGenerator:
                 data = unpickler.load()
                 yield data
 
+    # to be deleted
     def gen_unknown(self):
         with open(self.unknown_corpus.fp, 'rb') as f:
             unpickler = pickle.Unpickler(f)
@@ -152,6 +143,7 @@ class BatchGenerator:
                 data = unpickler.load()
                 yield data
 
+    # to be deleted
     def gen_silence(self):
         with open(self.silence_corpus.fp, 'rb') as f:
             unpickler = pickle.Unpickler(f)
@@ -162,10 +154,11 @@ class BatchGenerator:
     def batch_gen(self):
         x = []
         y = []
-        gen_train = self.gen_train()
-        gen_noise = self.gen_bg()
-        gen_unknown = self.gen_unknown()
-        gen_silence = self.gen_silence()
+        gen_train = self.gen_corpus(self.train_corpus.fp)
+        gen_noise = self.gen_corpus(self.background_corpus.fp)
+        gen_unknown = self.gen_corpus(self.unknown_corpus.fp)
+        # gen_silence = self.gen_corpus(self.silence_corpus.fp)
+        gen_silence = None
 
         while True:
             type = np.random.choice(['known', 'unknown', 'silence'],
@@ -178,7 +171,7 @@ class BatchGenerator:
                     train_data = next(gen_train)
                 except EOFError:
                     print('restarting gen_train')
-                    gen_train = self.gen_train()
+                    gen_train = self.gen_corpus(self.train_corpus.fp)
                     train_data = next(gen_train)
             elif type == 'unknown':
                 try:
@@ -186,7 +179,7 @@ class BatchGenerator:
 
                 except EOFError:
                     print('restarting gen_unknown')
-                    gen_unknown = self.gen_unknown()
+                    gen_unknown = self.gen_corpus(self.unknown_corpus.fp)
                     train_data = next(gen_unknown)
             else:
                 try:
@@ -194,13 +187,13 @@ class BatchGenerator:
 
                 except EOFError:
                     print('restarting gen_silence')
-                    gen_silence = self.gen_silence()
+                    gen_silence = self.gen_corpus(self.silence_corpus.fp)
                     train_data = next(gen_silence)
             try:
                 noise = next(gen_noise)
             except EOFError:
                 print('restarting gen_bg')
-                gen_noise = self.gen_bg()
+                gen_noise = self.gen_corpus(self.background_corpus.fp)
                 noise = next(gen_noise)
 
             raw_wav = train_data['wav']
@@ -223,7 +216,7 @@ class BatchGenerator:
             else:
                 wav = raw_wav
             if self.do_mfcc:
-                signal = self._do_mfcc(wav)
+                signal = stacked_mfcc(wav)
             else:
                 signal = wav
             x.append(signal)
