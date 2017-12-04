@@ -355,9 +355,9 @@ class SilenceDetector:
 
 if __name__ == "__main__":
     SC = SilenceDetector()
-    SC.testcase()
+    #SC.testcase()
     # SC.demo_lf()
     from batch_gen import SoundCorpus
 
     test_corpus = SoundCorpus('assets/corpora/corpus12/', mode='own_test', fn='own_test.p.soundcorpus.p')
-    SC.test_acc(test_corpus)
+    SC.test_acc_on_corpus(test_corpus)
