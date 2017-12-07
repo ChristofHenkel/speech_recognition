@@ -5,8 +5,7 @@
 As part of kaggle competition (https://www.kaggle.com/c/tensorflow-speech-recognition-challenge)
 
 
-
-#Steps
+# Steps
 
 1. Download training and test data
 2. run data_augmentation to generate background noise
@@ -29,8 +28,11 @@ https://www.kaggle.com/c/tensorflow-speech-recognition-challenge/download/sample
 
 ### unzip the selected data
 There is a kwnon issue on OSX. Use Keka www.kekaosx.com or cmd-line using brew:
+
 `$ brew update`
+
 `$ brew install p7zip`
+
 `$ 7z x train.7z`
 
 ## run data_augmentation
@@ -44,7 +46,7 @@ Since the structure of training, validation, test, background noise etc. is quit
 seperate soundcorpus files containing the wav as numpy arrays and the according labels. Soundcorpora are saved in a way that we can stream
 data from them for training and on-the-fly noise mixing.
 
-Running 'create_soundcorpus.py' will create different soundcorpora and an info_dictonary containing the length of each
+Running `create_soundcorpus.py will create different soundcorpora and an info_dictonary containing the length of each
 soundcorpus. We create corpora for:
 *   train
 *   valid
@@ -53,14 +55,27 @@ soundcorpus. We create corpora for:
 *   unknown
 *   silence
 
-## start training with specific batch composition, model architecture and model hparams
+## start training `
+with specific batch composition, model architecture and model hparams
 
 ### important classes and scripts
-###   BatchGen
+
+####   BatchGen
 
 
 
-###  Model
+####  Model
+class capturing the baseline of the model architecture from input to logits.
+
+### Visualization
+
+#### Confusion Matrix
+
+#### Tensorbaord
+
+
+
+
 
 
 
@@ -81,4 +96,4 @@ analyze_corpus.py
 ## what we learned so far
 
 * mfcc good for training commands, but overfits instantly on background noise
-* since silence ( meaning non-speech sound ) is quite different from the othe rlabels, it might be best to handle it seperately
+* since silence ( meaning non-speech sound ) is quite different from the other labels, it might be best to handle it seperately.

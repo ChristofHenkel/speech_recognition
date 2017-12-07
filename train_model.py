@@ -1,30 +1,30 @@
 
 from batch_gen import SoundCorpus, BatchGenerator
 import tensorflow as tf
-from tensorflow.contrib import layers
-import numpy as np
 import time
 import logging
-import pickle
-import os
-from architectures import Model2 as Model
+from architectures import Model5 as Model
 logging.basicConfig(level=logging.DEBUG)
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus12/'
     is_training = True
     use_batch_norm = True
-    keep_prob = 1
+    keep_prob = 0.8
     max_gradient = 5
-    tf_seed = 2
+    tf_seed = 4
     learning_rate = 1
-    lr_decay_rate = 0.8
+    lr_decay_rate = 0.9
     lr_change_steps = 100
     display_step = 10
     display_step_val = 50
-    epochs = 20
+    epochs = 50
     epochs_per_save = 1
-    logs_path = 'models/model32/'
+    logs_path = 'models/model42/'
+
+    def save(self):
+        with open(self.logs_path + 'config.txt','w') as f:
+
 
 class BatchParams:
     batch_size = 512
@@ -72,27 +72,21 @@ with graph.as_default():
         y = tf.placeholder(tf.int64, shape=(None,), name="input")
         keep_prob = tf.placeholder(tf.float32, name="dropout")
 
-
-
-    # (128, 12) -> (1)
-    # loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=logits))
     with tf.variable_scope('logit'):
         logits = cnn_model.calc_logits(x,keep_prob,num_classes)
         predictions = tf.nn.softmax(logits)
 
     with tf.variable_scope('costs'):
-        xent = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=y, logits=logits)
-        cost = tf.reduce_mean(xent, name='xent')
-        # cost += self._decay()
+        xent = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=logits)
+        cost = tf.reduce_mean(xent, name='xent')#
+
 
         tf.summary.scalar('cost', cost)
 
     with tf.variable_scope('acc'):
         pred = tf.argmax(logits, 1)
         correct_prediction = tf.equal(pred, tf.reshape(y, [-1]))
-        accuracy = tf.reduce_mean(
-            tf.cast(correct_prediction, tf.float32), name='accu')
+        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name='accu')
         confusion_matrix = tf.confusion_matrix(tf.reshape(y, [-1]),pred,num_classes)
         tf.summary.scalar('accuracy', accuracy)
     with tf.variable_scope('acc_per_class'):
@@ -106,13 +100,12 @@ with graph.as_default():
     raw_gradients = tf.gradients(cost, tf.trainable_variables())
     gradnorm = tf.global_norm(raw_gradients)
     tf.summary.scalar('grad_norm', gradnorm)
-    gradients, _ = tf.clip_by_global_norm(raw_gradients,
-                                          max_gradient, name="clip_gradients")
+    gradients, _ = tf.clip_by_global_norm(raw_gradients,max_gradient, name="clip_gradients")
     gradnorm_clipped = tf.global_norm(gradients)
     tf.summary.scalar('grad_norm_clipped', gradnorm_clipped)
     iteration = tf.Variable(0, dtype=tf.int64, name="iteration", trainable=False)
     lr_ = tf.Variable(cfg.learning_rate, dtype=tf.float64, name="lr_", trainable=False)
-    decay = tf.Variable(0.95, dtype=tf.float64, name="decay", trainable=False)
+    decay = tf.Variable(cfg.lr_decay_rate, dtype=tf.float64, name="decay", trainable=False)
     steps_ = tf.Variable(100, dtype=tf.int64, name="setps_", trainable=False)
     lr = tf.train.exponential_decay(lr_, iteration,steps_, decay, staircase=True)
     tf.summary.scalar('learning_rate', lr)
@@ -121,14 +114,6 @@ with graph.as_default():
         name="train_step",
         global_step=iteration)
 
-
-
-    #grad_norm_summary = summaryOps.scalarSummary('squared L2-norm of the gradient', Grad_norm)
-    #self.train_writer.add_summary(grad_norm_summary, iteration)
-
-    #pred = tf.argmax(logits, axis=-1)
-    #correct_pred = tf.equal(pred, tf.reshape(y, [-1]))
-    #accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
     saver = tf.train.Saver()
     summaries = tf.summary.merge_all()
@@ -142,12 +127,10 @@ def debug_model():
     with tf.Session(graph=graph) as sess:
         init = tf.global_variables_initializer()
         sess.run(init)
-        batch_gen = corpus.batch_gen(cfg.batch_size)
+        batch_gen = advanced_gen.batch_gen()
         batch_x, batch_y = next(batch_gen)
-        cm,l, acc, pred_,y_, id1_ = sess.run([confusion_matrix,logits,accuracy,pred,y,id1], feed_dict={x: batch_x, y: batch_y, keep_prob: cfg.keep_prob})
-        print(cm)
-        print(l, acc)
-        return (cm, l, acc,pred_,y_, id1_)
+        l, kw = sess.run([logits, krw], feed_dict={x: batch_x, y: batch_y, keep_prob: cfg.keep_prob})
+        return l, kw
 
 def aggregate_y(batch_y):
     knowns = [id for id in batch_y if id in [0,1,2,3,4,5,6,7,8,9]]
