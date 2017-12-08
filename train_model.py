@@ -1,4 +1,13 @@
+"""
+TODOS   - run with disabled 1st layer -> done
+        - check different initializer on last fc layer
+        - read docu momentum
+        - change validation corpus to reflect % of unknown
+        - run with unknown portion of 0.09 -> done really bad test acc
+        - run with batch normalization and unknown portion of 63%
+        - (test batch normalization with is_training = False)
 
+"""
 from batch_gen import SoundCorpus, BatchGenerator
 import tensorflow as tf
 import time
@@ -9,27 +18,32 @@ logging.basicConfig(level=logging.DEBUG)
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus12/'
     is_training = True
-    use_batch_norm = True
+    use_batch_norm = False
     keep_prob = 0.8
     max_gradient = 5
-    tf_seed = 4
-    learning_rate = 1
+    tf_seed = 7
+    learning_rate = 0.1
     lr_decay_rate = 0.9
     lr_change_steps = 100
     display_step = 10
     display_step_val = 50
     epochs = 50
     epochs_per_save = 1
-    logs_path = 'models/model42/'
+
+
+
+    logs_path = 'models/model51/'
 
     def save(self):
         with open(self.logs_path + 'config.txt','w') as f:
+            pass
 
 
 class BatchParams:
     batch_size = 512
     do_mfcc = True # batch will have dims (batch_size, 99, 13, 3)
-    portion_unknown = 0.15
+    dims_mfcc = (99,13,3) # not used yet
+    portion_unknown = 0.09
     portion_silence = 0
     portion_noised = 1
     lower_bound_noise_mix = 0.5
@@ -39,7 +53,7 @@ class BatchParams:
 
 cfg = Config()
 
-corpus = SoundCorpus(cfg.soundcorpus_dir, mode='train')
+train_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='train')
 valid_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='valid', fn='valid.p.soundcorpus.p')
 len_valid = valid_corpus._get_len()
 background_noise_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='background', fn='background.p.soundcorpus.p')
@@ -47,10 +61,10 @@ unknown_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='unknown', fn='unknown.p.
 silence_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='silence', fn='silence.p.soundcorpus.p')
 
 batch_parameters = BatchParams()
-advanced_gen = BatchGenerator(batch_parameters, corpus, background_noise_corpus, unknown_corpus, SilenceCorpus=None)
+advanced_gen = BatchGenerator(batch_parameters, train_corpus, background_noise_corpus, unknown_corpus, SilenceCorpus=None)
 
-encoder = corpus.encoder
-decoder = corpus.decoder
+encoder = train_corpus.encoder
+decoder = train_corpus.decoder
 
 num_classes=len(decoder)-1
 
@@ -60,7 +74,7 @@ batch_size = batch_parameters.batch_size
 is_training = cfg.is_training
 max_gradient = cfg.max_gradient
 
-training_iters = corpus.len
+training_iters = train_corpus.len
 
 cnn_model = Model(cfg)
 graph = tf.Graph()
@@ -78,7 +92,7 @@ with graph.as_default():
 
     with tf.variable_scope('costs'):
         xent = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=logits)
-        cost = tf.reduce_mean(xent, name='xent')#
+        cost = tf.reduce_mean(xent, name='xent')
 
 
         tf.summary.scalar('cost', cost)
@@ -92,24 +106,24 @@ with graph.as_default():
     with tf.variable_scope('acc_per_class'):
         for i in range(num_classes):
             acc_id = confusion_matrix[i,i]/tf.reduce_sum(confusion_matrix[i,:])
-            tf.summary.scalar(corpus.decoder[i], acc_id)
+            tf.summary.scalar(train_corpus.decoder[i], acc_id)
 
 
 
     # train ops
-    raw_gradients = tf.gradients(cost, tf.trainable_variables())
-    gradnorm = tf.global_norm(raw_gradients)
+    gradients = tf.gradients(cost, tf.trainable_variables())
+    gradnorm = tf.global_norm(gradients)
     tf.summary.scalar('grad_norm', gradnorm)
-    gradients, _ = tf.clip_by_global_norm(raw_gradients,max_gradient, name="clip_gradients")
-    gradnorm_clipped = tf.global_norm(gradients)
-    tf.summary.scalar('grad_norm_clipped', gradnorm_clipped)
+    #gradients, _ = tf.clip_by_global_norm(raw_gradients,max_gradient, name="clip_gradients")
+    #gradnorm_clipped = tf.global_norm(gradients)
+    #tf.summary.scalar('grad_norm_clipped', gradnorm_clipped)
     iteration = tf.Variable(0, dtype=tf.int64, name="iteration", trainable=False)
     lr_ = tf.Variable(cfg.learning_rate, dtype=tf.float64, name="lr_", trainable=False)
     decay = tf.Variable(cfg.lr_decay_rate, dtype=tf.float64, name="decay", trainable=False)
-    steps_ = tf.Variable(100, dtype=tf.int64, name="setps_", trainable=False)
+    steps_ = tf.Variable(cfg.lr_change_steps, dtype=tf.int64, name="setps_", trainable=False)
     lr = tf.train.exponential_decay(lr_, iteration,steps_, decay, staircase=True)
     tf.summary.scalar('learning_rate', lr)
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=lr).apply_gradients(
+    optimizer = tf.train.MomentumOptimizer(learning_rate=lr_, momentum=0.1).apply_gradients(
         zip(gradients, tf.trainable_variables()),
         name="train_step",
         global_step=iteration)
@@ -201,9 +215,9 @@ def train_model():
 def predict():
     fn_model = 'models/model0/model_mfcc_bsize256_e4.ckpt'
     # %%
-    id2name = corpus.decoder
+    id2name = train_corpus.decoder
 
-    batch_gen = corpus.batch_gen(6)
+    batch_gen = train_corpus.batch_gen(6)
     with tf.Session(graph=graph) as sess:
         # Restore variables from disk.
         saver.restore(sess, fn_model)

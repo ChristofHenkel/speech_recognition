@@ -79,7 +79,8 @@ batch_y_test = [np.random.randint(0,11) for b in batch_y]
 batch_y_incl_silence_test = [np.random.randint(0,11) for b in batch_y_incl_silence]
 
 def predict(batch_x,batch_y):
-    fn_model = 'models/model40/model_mfcc_bsize512_e49.ckpt'
+    # fn_model = 'models/model40/model_mfcc_bsize512_e49.ckpt'
+    fn_model = 'models/model48/model_mfcc_bsize512_e49.ckpt'
     # %%
 
 

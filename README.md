@@ -92,8 +92,19 @@ analyze_corpus.py
 
 * Good MFCC explanation: http://haythamfayek.com/2016/04/21/speech-processing-for-machine-learning.html
 * Tensorflow tutorial on speech recognition: https://www.tensorflow.org/versions/master/tutorials/audio_recognition
+* Batch Normalization
+* Deep Speech
 
 ## what we learned so far
 
 * mfcc good for training commands, but overfits instantly on background noise
 * since silence ( meaning non-speech sound ) is quite different from the other labels, it might be best to handle it seperately.
+* Batch Normalization not good if test data hast different distribution from train data, how ever helps to escape local minima
+
+## TODOS
+
+* fix seed
+* refactor model class
+* portion of unknown in valid set
+* write config
+

@@ -45,6 +45,15 @@ class SoundCorpus:
             size +=1
         return size
 
+    def _get_last_n(self,length, n):
+        pos = 0
+        items = []
+        for item in self.gen:
+            pos +=1
+            if pos > (length-n):
+                items.append(item)
+        return items
+
     def play_next(self):
         data = next(self.gen)
         wav = data['wav']
