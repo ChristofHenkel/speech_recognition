@@ -1,90 +1,46 @@
 """
-TODOS   - run with disabled 1st layer -> done
-        - check different initializer on last fc layer
-        - read docu momentum
-        - change validation corpus to reflect % of unknown
-        - run with unknown portion of 0.09 -> done really bad test acc
-        - run with batch normalization and unknown portion of 63%
-        - (test batch normalization with is_training = False)
-with self.graph.as_default():
-    # no session here
-    self.X = tf.placeholder(tf.float32)
-    self.Y = tf.placeholder(tf.float32)
 
-# open session with providing the graph
-with tf.Session(graph=self.graph) as sess:
-    pass
 """
 from batch_gen import SoundCorpus, BatchGenerator
 import pickle
 import tensorflow as tf
 import time
 import logging
-from architectures import Model5 as Baseline
+from architectures import Baseline7 as Baseline
 logging.basicConfig(level=logging.DEBUG)
 
 
-
-
-
-
-
-
-
-# Launch the graph
-# TESTING
-
-
-#def predict():
-#    fn_model = 'models/model0/model_mfcc_bsize256_e4.ckpt'
-#    # %%
-#    id2name = train_corpus.decoder
-#
-#    batch_gen = train_corpus.batch_gen(6)
-#    with tf.Session(graph=graph) as sess:
-#        # Restore variables from disk.
-#        saver.restore(sess, fn_model)
-#        print("Model restored.")
-#        predictions = []
-#        k_batch = 0
-#        try:
-#            for (batch_x, batch_y) in batch_gen:
-#                if k_batch % 100 == 0:
-#                    print('------')
-#                    logging.info(str(k_batch))
-#                prediction = sess.run([pred], feed_dict={x: batch_x, keep_prob: 1.0})
-#                print(prediction)
-#                for k,p in enumerate(prediction[0]):
-#                    label_true, label = id2name[batch_y[k]], id2name[p]
-#                    predictions.append([label_true,label])
-#                k_batch += 1
-#        except EOFError:
-#            pass
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus12/'
+    logs_path = 'models/model48/'
+
+class Hparams:
     is_training = True
-    use_batch_norm = True
-    keep_prob = 1
+    use_batch_norm = False
+    keep_prob = 0.7
     max_gradient = 5
     tf_seed = 7
     learning_rate = 1
     lr_decay_rate = 0.9
     lr_change_steps = 100
-    display_step = 10
-    display_step_val = 50
     epochs = 50
     epochs_per_save = 1
-    logs_path = 'models/model48/'
+    #def save(self):
+    #    with open(self.logs_path + 'config.txt', 'w') as f:
+    #        pass
 
-    def save(self):
-        with open(self.logs_path + 'config.txt', 'w') as f:
-            pass
+
+class DisplayParams:
+    print_step = 10
+    print_step_val = 500
+    print_confusion_matrix = True
 
 
 class BatchParams:
     batch_size = 512
     do_mfcc = True  # batch will have dims (batch_size, 99, 13, 3)
-    portion_unknown = 0.15
+    dims_mfcc = (99, 13, 3)
+    portion_unknown = 0.09
     portion_silence = 0
     portion_noised = 1
     lower_bound_noise_mix = 0.5
@@ -95,14 +51,15 @@ class BatchParams:
 
 class Model:
 
-
     def __init__(self):
         self.cfg = Config()
+        self.hparams = Hparams()
         self.graph = tf.Graph()
         self.batch_params = BatchParams()
-        self.tf_seed = tf.set_random_seed(self.cfg.tf_seed)
+        self.display_params = DisplayParams()
+        self.tf_seed = tf.set_random_seed(self.hparams.tf_seed)
 
-        self.baseline = Baseline(self.cfg)
+        self.baseline = Baseline(self.hparams, self.batch_params)
         self.infos = self._load_infos()
         self.train_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='train')
         self.valid_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='valid', fn='valid.p.soundcorpus.p')
@@ -115,19 +72,14 @@ class Model:
         self.advanced_gen = BatchGenerator(self.batch_params, self.train_corpus, self.noise_corpus, self.unknown_corpus,
                                       SilenceCorpus=None)
 
-        self.encoder = self.infos['label2id']
-        self.decoder = self.infos['id2label']
+        self.encoder = self.infos['name2id']
+        self.decoder = self.infos['id2name']
         self.num_classes = len(self.decoder) - 1 #11
-
-
-        # set_graph Graph
-
-
         self.training_iters = self.train_corpus.len
-        pass
+
 
     def _load_infos(self):
-        with open(self.cfg.soundcorpus_dir + 'infos.p','rb') as f:
+        with open(self.cfg.soundcorpus_dir + 'infos.p', 'rb') as f:
             infos = pickle.load(f)
         return infos
 
@@ -137,12 +89,37 @@ class Model:
         s_path = self.saver.save(sess, self.cfg.logs_path + model_name)
         print("Model saved in file: %s" % s_path)
 
+    @staticmethod
+    def class2dict(class_):
+        class_list = [ item for item in sorted(class_.__dict__ ) if not item.startswith('__')]
+        class_dict = {}
+        for item in class_list:
+            class_dict[item] = class_.__dict__[item]
+        return class_dict
 
-    def restore(self):
-        pass
+    def restore(self, sess, fn_model):
+        self.saver.restore(sess, fn_model)
+        print("Model restored.")
 
-    def predict(self):
-        pass
+
+    def predict(self, batch_x_iter, fn_model):
+        with tf.Session(graph=self.graph) as sess:
+
+            self.restore(sess, fn_model)
+            predictions = []
+            k_batch = 0
+            try:
+                for batch_x in batch_x_iter:
+                    if k_batch % 100 == 0:
+                        logging.info(str(k_batch))
+                    prediction = sess.run([self.pred], feed_dict={self.x: batch_x, self.keep_prob: 1.0})
+                    print(prediction)
+                    for k,p in enumerate(prediction[0]):
+                        predictions.append([batch_x[k],self.decoder[p]])
+                    k_batch += 1
+            except EOFError:
+                pass
+        return predictions
 
     def train(self):
         with tf.Session(graph=self.graph) as sess:
@@ -154,7 +131,7 @@ class Model:
             global_step = 0
 
             batch_gen = self.advanced_gen.batch_gen()
-            for epoch in range(self.cfg.epochs):
+            for epoch in range(self.hparams.epochs):
                 step = 1
 
                 # Keep training until reach max iterations
@@ -168,22 +145,23 @@ class Model:
 
                     # Run optimization op (backprop)
                     summary_, _ = sess.run([self.summaries, self.optimizer],
-                                           feed_dict={self.x: batch_x, self.y: batch_y, self.keep_prob: self.cfg.keep_prob})
+                                           feed_dict={self.x: batch_x, self.y: batch_y, self.keep_prob: self.hparams.keep_prob})
                     train_writer.add_summary(summary_, global_step)
-                    if step % self.cfg.display_step == 0:
+                    if step % self.display_params.print_step == 0:
                         # Calculate batch accuracy
                         logging.info('epoch %s - step %s' % (epoch, step))
-                        logging.info('runtime for batch of ' + str(self.batch_params.batch_size * self.cfg.display_step) + ' ' + str(
+                        logging.info('runtime for batch of ' + str(self.batch_params.batch_size * self.display_params.print_step) + ' ' + str(
                             time.time() - current_time))
                         current_time = time.time()
                         c, acc, cm = sess.run([self.cost, self.accuracy, self.confusion_matrix],
-                                              feed_dict={self.x: batch_x, self.y: batch_y, self.keep_prob: self.cfg.keep_prob})
+                                              feed_dict={self.x: batch_x, self.y: batch_y, self.keep_prob: self.hparams.keep_prob})
 
                         print(c, acc)
-                        print(cm)
+                        if self.display_params.print_confusion_matrix:
+                            print(cm)
                         print(self.advanced_gen.batches_counter)
 
-                    if global_step % self.cfg.display_step_val == 0:
+                    if global_step % self.display_params.print_step_val == 0:
                         val_batch_gen = self.valid_corpus.batch_gen(self.len_valid, do_mfcc=True)
                         val_batch_x, val_batch_y = next(val_batch_gen)
                         summary_val, c_val, acc_val = sess.run([self.summaries, self.cost, self.accuracy],
@@ -247,7 +225,7 @@ class Model:
             # gradnorm_clipped = tf.global_norm(gradients)
             # tf.summary.scalar('grad_norm_clipped', gradnorm_clipped)
             self.iteration = tf.Variable(0, dtype=tf.int64, name="iteration", trainable=False)
-            self.lr_ = tf.Variable(self.cfg.learning_rate, dtype=tf.float64, name="lr_", trainable=False)
+            self.lr_ = tf.Variable(self.hparams.learning_rate, dtype=tf.float64, name="lr_", trainable=False)
             # decay = tf.Variable(cfg.lr_decay_rate, dtype=tf.float64, name="decay", trainable=False)
             # steps_ = tf.Variable(100, dtype=tf.int64, name="setps_", trainable=False)
             # lr = tf.train.exponential_decay(lr_, iteration,steps_, decay, staircase=True)

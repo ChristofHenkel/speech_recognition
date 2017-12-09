@@ -1,11 +1,10 @@
 """
-TODOS   - run with disabled 1st layer -> done
-        - check different initializer on last fc layer
+TODOS
+        - increase number of mfcc features
         - read docu momentum
-        - change validation corpus to reflect % of unknown
-        - run with unknown portion of 0.09 -> done really bad test acc
-        - run with batch normalization and unknown portion of 63%
-        - (test batch normalization with is_training = False)
+        - stacked lstm
+        - put silence back in
+
 
 """
 from batch_gen import SoundCorpus, BatchGenerator
@@ -32,7 +31,7 @@ class Config:
 
 
 
-    logs_path = 'models/model51/'
+    logs_path = 'models/model55/'
 
     def save(self):
         with open(self.logs_path + 'config.txt','w') as f:
@@ -42,7 +41,11 @@ class Config:
 class BatchParams:
     batch_size = 512
     do_mfcc = True # batch will have dims (batch_size, 99, 13, 3)
-    dims_mfcc = (99,13,3) # not used yet
+    dims_mfcc = (99,18,3) # not used yet
+    mfcc_params = dict( do_mfcc = True,
+                        nceps = 18,
+                        layers = 3)
+    input_shape = (None,) + dims_mfcc
     portion_unknown = 0.09
     portion_silence = 0
     portion_noised = 1
@@ -82,7 +85,7 @@ with graph.as_default():
     # tf Graph input
     tf.set_random_seed(cfg.tf_seed)
     with tf.name_scope("Input"):
-        x = tf.placeholder(tf.float32, shape=(None, 99, 13, 3), name="input")
+        x = tf.placeholder(tf.float32, shape= batch_parameters.input_shape, name="input")
         y = tf.placeholder(tf.int64, shape=(None,), name="input")
         keep_prob = tf.placeholder(tf.float32, name="dropout")
 
@@ -192,13 +195,13 @@ def train_model():
                     print(cm)
                     print(advanced_gen.batches_counter)
 
-                if global_step % cfg.display_step_val == 0:
-                    val_batch_gen = valid_corpus.batch_gen(len_valid, do_mfcc=True)
-                    val_batch_x, val_batch_y = next(val_batch_gen)
-                    summary_val, c_val, acc_val = sess.run([summaries, cost, accuracy],
-                                                           feed_dict={x: val_batch_x, y: val_batch_y, keep_prob: 1})
-                    valid_writer.add_summary(summary_val, global_step)
-                    print("validation:", c_val, acc_val)
+                #if global_step % cfg.display_step_val == 0:
+                #    val_batch_gen = valid_corpus.batch_gen(len_valid, do_mfcc=True)
+                #    val_batch_x, val_batch_y = next(val_batch_gen)
+                #    summary_val, c_val, acc_val = sess.run([summaries, cost, accuracy],
+                #                                           feed_dict={x: val_batch_x, y: val_batch_y, keep_prob: 1})
+                #    valid_writer.add_summary(summary_val, global_step)
+                #    print("validation:", c_val, acc_val)
 
                 step += 1
                 global_step += 1

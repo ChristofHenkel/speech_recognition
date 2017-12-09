@@ -103,6 +103,7 @@ class BatchGenerator:
         self.noise_silence = BatchParams.noise_silence
         self.do_mfcc = BatchParams.do_mfcc
         self.all_gen = self.batch_gen()
+        self.dims_mfcc = BatchParams.dims_mfcc
 
         self.batches_counter = 0
 
@@ -225,7 +226,7 @@ class BatchGenerator:
             else:
                 wav = raw_wav
             if self.do_mfcc:
-                signal = stacked_mfcc(wav)
+                signal = stacked_mfcc(wav,num_layers=self.dims_mfcc[2],numcep=self.dims_mfcc[1])
             else:
                 signal = wav
             x.append(signal)

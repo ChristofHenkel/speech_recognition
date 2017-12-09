@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO)
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus12/'
-    batch_size = 298
+    batch_size = 1
     is_training = False
     use_batch_norm = False
     keep_prob = 1
@@ -34,6 +34,7 @@ if rest > 0:
 else:
     rest_batch = []
 decoder = silence_corpus.decoder
+encoder = silence_corpus.encoder
 num_classes = len(decoder) -1
 
 model = Model(cfg)
@@ -108,10 +109,17 @@ def acc():
     comparison = [(p,submission[p],decoder[fname2label[p]]) for p in submission]
     acc = [a[1] == a[2] for a in comparison].count(True)/len(comparison)
     no_silence = [c for c in comparison if c[2] != 'silence']
+    acc_dict = {}
+    for l in encoder:
+        label_part = [c for c in comparison if c[2] == l]
+        acc_label = [a[1] == a[2] for a in label_part].count(True)/len(label_part)
+        acc_dict[l] = acc_label
+    print(acc_dict)
+
     acc_no_silence = [a[1] == a[2] for a in no_silence].count(True)/len(no_silence)
     print('acc: %s' %acc)
     print('acc w/o silence: %s' % acc_no_silence)
 if __name__ == '__main__':
-    submission = prepare_submission(fn_model='models/model51/model_mfcc_bsize512_e49.ckpt')
-
+    submission = prepare_submission(fn_model='models/model54/model_mfcc_bsize512_e49.ckpt')
+    acc()
     #fn_model = 'models/model47/model_mfcc_bsize512_e49.ckpt'
