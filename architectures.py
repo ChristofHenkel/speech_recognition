@@ -392,7 +392,6 @@ class Baseline7:
         self.num_conv_layers = 3
 
     def calc_logits(self,x,keep_prob,num_classes):
-        # was still wrong in model44
         if self.hparams['use_batch_norm']:
             x2 = layers.batch_norm(x, is_training=self.hparams['is_training'])
         else:
@@ -403,9 +402,6 @@ class Baseline7:
                                activation_fn=tf.nn.elu,
                                normalizer_fn=layers.batch_norm if self.hparams['use_batch_norm'] else None,
                                normalizer_params={'is_training': self.hparams['is_training']},
-                               #weights_initializer=layers.xavier_initializer(uniform=False),
-                               # biases_initializer=tf.truncated_normal_initializer(stddev=0.01, dtype=tf.float32)
-
                                )
             x2 = layers.max_pool2d(x2, 2, 2)
 
@@ -423,11 +419,14 @@ class Baseline7:
                 fw_cell = tf.contrib.rnn.BasicLSTMCell(128, forget_bias=1.0, state_is_tuple=True)  # or True
                 stacked_fw_rnn.append(fw_cell)
             fw_multi_cell = tf.contrib.rnn.MultiRNNCell(cells=stacked_fw_rnn, state_is_tuple=True)
-            fw_reset_state = fw_multi_cell.zero_state(self.batch_params.batch_size, dtype=tf.float32)
-            fw_state = fw_reset_state
+            #fw_reset_state = fw_multi_cell.zero_state(self.batch_params.batch_size, dtype=tf.float32)
+            #fw_state = fw_reset_state
 
-            fw_output, fw_state = fw_multi_cell(x2, fw_state)
-            fw_outputs = tf.reshape(fw_output, [-1, 128])
+            output, _ = tf.nn.dynamic_rnn(fw_multi_cell, x2, dtype=tf.float32)
+            # Select last output.
+            output = tf.transpose(output, [1, 0, 2])
+            fw_outputs = tf.gather(output, int(output.get_shape()[0]) - 1)
+            #fw_outputs = tf.reshape(fw_output, [-1, 128])
 
         with tf.variable_scope('lstm2'):
             stacked_bw_rnn = []
@@ -435,14 +434,17 @@ class Baseline7:
                 bw_cell = tf.contrib.rnn.BasicLSTMCell(128, forget_bias=1.0, state_is_tuple=True)  # or True
                 stacked_bw_rnn.append(bw_cell)
             bw_multi_cell = tf.contrib.rnn.MultiRNNCell(cells=stacked_bw_rnn, state_is_tuple=True)
-            bw_reset_state = bw_multi_cell.zero_state(self.batch_params.batch_size, dtype=tf.float32)
-            bw_state = bw_reset_state
+            #bw_reset_state = bw_multi_cell.zero_state(self.batch_params.batch_size, dtype=tf.float32)
+            #bw_state = bw_reset_state
 
-            bw_output, bw_state = bw_multi_cell(x2, bw_state)
-            bw_outputs = tf.reshape(bw_output, [-1, 128])
+            bw_output, _ = tf.nn.dynamic_rnn(bw_multi_cell, x2, dtype=tf.float32)
+            # Select last output.
+            bw_output = tf.transpose(bw_output, [1, 0, 2])
+            bw_outputs = tf.gather(bw_output, int(bw_output.get_shape()[0]) - 1)
 
 
-        outputs = fw_outputs[-1] + bw_outputs[-1]
+        #outputs = fw_outputs[-1] + bw_outputs[-1]
+        outputs = fw_outputs + bw_outputs
         outputs = tf.nn.dropout(outputs, keep_prob=keep_prob)
         #x2 = layers.conv2d(x2, 32, 1, 1, activation_fn=tf.nn.elu)   # we can use conv2d 1x1 instead of dense
         x3 = layers.fully_connected(outputs, 32, activation_fn=tf.nn.relu)
@@ -454,5 +456,8 @@ class Baseline7:
 
         return logits
 
-
-
+        #network = tf.contrib.rnn.MultiRNNCell([network] * self._num_layers)
+        #output, _ = tf.nn.dynamic_rnn(network, self.data, dtype=tf.float32)
+        ## Select last output.
+        #output = tf.transpose(output, [1, 0, 2])
+        #last = tf.gather(output, int(output.get_shape()[0]) - 1)
