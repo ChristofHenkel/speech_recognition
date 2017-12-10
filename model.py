@@ -1,27 +1,36 @@
 """
+try regulizer:
 
+regularizer = tf.contrib.layers.l2_regularizer(scale=0.1)
+layer2 = tf.layers.conv2d(
+    inputs,
+    filters,
+    kernel_size,
+    kernel_regularizer=regularizer)
 """
 from batch_gen import SoundCorpus, BatchGenerator
 import pickle
 import tensorflow as tf
 import time
 import logging
-from architectures import Baseline7 as Baseline
+import os
+from architectures import Baseline8 as Baseline
 logging.basicConfig(level=logging.DEBUG)
 
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus12/'
-    logs_path = 'models/model48/'
+    logs_path = 'models/model61/'
+    max_ckpt_to_keep = 10
 
 class Hparams:
     is_training = True
     use_batch_norm = False
-    keep_prob = 0.7
+    keep_prob = 0.8
     max_gradient = 5
     tf_seed = 7
     learning_rate = 0.1
-    lr_decay_rate = 0.9
+    lr_decay_rate = 0.95
     lr_change_steps = 100
     epochs = 50
     epochs_per_save = 1
@@ -58,10 +67,12 @@ class Model:
         self.batch_params = BatchParams()
         self.display_params = DisplayParams()
 
+        self.write_config()
+
         self.graph = tf.Graph()
         self.tf_seed = tf.set_random_seed(self.h_params.tf_seed)
 
-        self.baseline = Baseline(self.h_params, self.batch_params)
+        self.baseline = Baseline(self.h_params)
         self.infos = self._load_infos()
         self.train_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='train')
         self.valid_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='valid', fn='valid.p.soundcorpus.p')
@@ -92,12 +103,27 @@ class Model:
         print("Model saved in file: %s" % s_path)
 
     @staticmethod
-    def class2dict(class_):
-        class_list = [ item for item in sorted(class_.__dict__ ) if not item.startswith('__')]
-        class_dict = {}
-        for item in class_list:
-            class_dict[item] = class_.__dict__[item]
-        return class_dict
+    def class2list(class_):
+        class_list = [[item,class_.__dict__ [item]]for item in sorted(class_.__dict__ ) if not item.startswith('__')]
+        return class_list
+
+    def write_config(self):
+        with open(os.path.join(self.cfg.logs_path, 'config.txt'), 'w') as f:
+            f.write('Config\n')
+            for line in self.class2list(Config):
+                f.write('{} = {}\n'.format(line[0], line[1]))
+            f.write('\n')
+            f.write('HParams\n')
+            for line in self.class2list(Hparams):
+                f.write('{} = {}\n'.format(line[0], line[1]))
+            f.write('\n')
+            f.write('DisplayParams\n')
+            for line in self.class2list(DisplayParams):
+                f.write('{} = {}\n'.format(line[0], line[1]))
+            f.write('\n')
+            f.write('BatchParams\n')
+            for line in self.class2list(BatchParams):
+                f.write('{} = {}\n'.format(line[0], line[1]))
 
     def restore(self, sess, fn_model):
         self.saver.restore(sess, fn_model)
@@ -134,6 +160,7 @@ class Model:
 
             batch_gen = self.advanced_gen.batch_gen()
             for epoch in range(self.h_params.epochs):
+
                 step = 1
 
                 # Keep training until reach max iterations
@@ -151,6 +178,7 @@ class Model:
                     train_writer.add_summary(summary_, global_step)
                     if step % self.display_params.print_step == 0:
                         # Calculate batch accuracy
+
                         logging.info('epoch %s - step %s' % (epoch, step))
                         logging.info('runtime for batch of ' + str(self.batch_params.batch_size * self.display_params.print_step) + ' ' + str(
                             time.time() - current_time))
@@ -163,18 +191,18 @@ class Model:
                             print(cm)
                         print(self.advanced_gen.batches_counter)
 
-                    if global_step % self.display_params.print_step_val == 0:
-                        val_batch_gen = self.valid_corpus.batch_gen(self.len_valid, do_mfcc=True)
-                        val_batch_x, val_batch_y = next(val_batch_gen)
-                        summary_val, c_val, acc_val = sess.run([self.summaries, self.cost, self.accuracy],
-                                                               feed_dict={self.x: val_batch_x, self.y: val_batch_y, self.keep_prob: 1})
-                        valid_writer.add_summary(summary_val, global_step)
-                        print("validation:", c_val, acc_val)
 
                     step += 1
                     global_step += 1
                 # if epoch % cfg.epochs_per_save == 0:
                 self.save(sess, epoch)
+                val_batch_gen = self.valid_corpus.batch_gen(self.len_valid, do_mfcc=True)
+                val_batch_x, val_batch_y = next(val_batch_gen)
+                summary_val, c_val, acc_val = sess.run([self.summaries, self.cost, self.accuracy],
+                                                       feed_dict={self.x: val_batch_x, self.y: val_batch_y,
+                                                                  self.keep_prob: 1})
+                valid_writer.add_summary(summary_val, global_step)
+                print("validation:", c_val, acc_val)
 
             print("Optimization Finished!")
         pass
@@ -228,18 +256,23 @@ class Model:
             # tf.summary.scalar('grad_norm_clipped', gradnorm_clipped)
             self.iteration = tf.Variable(0, dtype=tf.int64, name="iteration", trainable=False)
             self.lr_ = tf.Variable(self.h_params.learning_rate, dtype=tf.float64, name="lr_", trainable=False)
-            # decay = tf.Variable(cfg.lr_decay_rate, dtype=tf.float64, name="decay", trainable=False)
-            # steps_ = tf.Variable(100, dtype=tf.int64, name="setps_", trainable=False)
-            # lr = tf.train.exponential_decay(lr_, iteration,steps_, decay, staircase=True)
-            # tf.summary.scalar('learning_rate', lr)
-            self.optimizer = tf.train.MomentumOptimizer(learning_rate=self.lr_, momentum=self.h_params.momentum).apply_gradients(
+            decay = tf.Variable(self.h_params.lr_decay_rate, dtype=tf.float64, name="decay", trainable=False)
+            steps_ = tf.Variable(self.h_params.lr_change_steps, dtype=tf.int64, name="setps_", trainable=False)
+            self.lr = tf.train.exponential_decay(self.lr_, self.iteration,steps_, decay, staircase=True)
+            tf.summary.scalar('learning_rate', self.lr)
+            self.optimizer = tf.train.MomentumOptimizer(learning_rate=self.lr, momentum=self.h_params.momentum).apply_gradients(
                 zip(self.gradients, tf.trainable_variables()),
                 name="train_step",
                 global_step=self.iteration)
 
-            self.saver = tf.train.Saver()
+            self.saver = tf.train.Saver(max_to_keep=self.cfg.max_ckpt_to_keep)
             self.summaries = tf.summary.merge_all()
 
         logging.info('Done')
 
 
+if __name__ == '__main__':
+
+    m = Model()
+    m.set_graph()
+    m.train()

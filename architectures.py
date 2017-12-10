@@ -383,10 +383,9 @@ class Baseline7:
     ConvNet with stacked RNN on top
     """
 
-    def __init__(self, cfg, batch_params):
+    def __init__(self, cfg):
         self.test = ''
         self.config = cfg
-        self.batch_params = batch_params
         self.hparams = {'use_batch_norm':cfg.use_batch_norm,
                         'is_training':cfg.is_training}
         self.num_conv_layers = 3
@@ -396,12 +395,13 @@ class Baseline7:
             x2 = layers.batch_norm(x, is_training=self.hparams['is_training'])
         else:
             x2 = x
-
         for i in range(self.num_conv_layers):
+
             x2 = layers.conv2d(x2, 8 * 2 ** i, 3, 1,
                                activation_fn=tf.nn.elu,
-                               normalizer_fn=layers.batch_norm if self.hparams['use_batch_norm'] else None,
-                               normalizer_params={'is_training': self.hparams['is_training']},
+                              normalizer_fn=layers.batch_norm if self.hparams['use_batch_norm'] else None,
+                               normalizer_params={'is_training': self.hparams['is_training']}
+
                                )
             x2 = layers.max_pool2d(x2, 2, 2)
 
@@ -448,16 +448,91 @@ class Baseline7:
         outputs = tf.nn.dropout(outputs, keep_prob=keep_prob)
         #x2 = layers.conv2d(x2, 32, 1, 1, activation_fn=tf.nn.elu)   # we can use conv2d 1x1 instead of dense
         x3 = layers.fully_connected(outputs, 32, activation_fn=tf.nn.relu)
-        #x2 = tf.nn.dropout(x2, keep_prob=keep_prob)
-        #x3 = layers.fully_connected(outputs, 16, activation_fn=tf.nn.relu)
+
 
         logits = layers.fully_connected(x3, num_classes, activation_fn=tf.nn.relu)
 
 
         return logits
 
-        #network = tf.contrib.rnn.MultiRNNCell([network] * self._num_layers)
-        #output, _ = tf.nn.dynamic_rnn(network, self.data, dtype=tf.float32)
-        ## Select last output.
-        #output = tf.transpose(output, [1, 0, 2])
-        #last = tf.gather(output, int(output.get_shape()[0]) - 1)
+class Baseline8:
+    """
+    ConvNet with stacked RNN on top
+    """
+
+    def __init__(self, cfg):
+        self.test = ''
+        self.config = cfg
+        self.hparams = {'use_batch_norm':cfg.use_batch_norm,
+                        'is_training':cfg.is_training}
+        self.num_conv_layers = 3
+
+    def calc_logits(self,x,keep_prob,num_classes):
+        if self.hparams['use_batch_norm']:
+            x2 = layers.batch_norm(x, is_training=self.hparams['is_training'])
+        else:
+            x2 = x
+        #regularizer = tf.contrib.layers.l2_regularizer(scale=0.1)
+        for i in range(self.num_conv_layers):
+
+            x2 = layers.conv2d(x2, 8 * 2 ** i, 3, 1,
+                               activation_fn=tf.nn.elu,
+                              normalizer_fn=layers.batch_norm if self.hparams['use_batch_norm'] else None,
+                               normalizer_params={'is_training': self.hparams['is_training']},
+                               #weights_regularizer=regularizer
+                               )
+            #x2 = tf.layers.conv2d(x2, 8 * 2 ** i, 3, 1,kernel_regularizer=regularizer)
+            x2 = layers.max_pool2d(x2, 2, 2)
+
+        x2 = x2[:,:,0,:]
+
+        #nceps = 18
+        #x2 = tf.unstack(x2, 12, 1)
+        #x2 = tf.unstack(x2, 12, 1)
+
+
+        # Define a lstm cell with tensorflow
+        with tf.variable_scope('lstm1'):
+            stacked_fw_rnn = []
+            for fw_Lyr in range(2):
+                fw_cell = tf.contrib.rnn.BasicLSTMCell(128, forget_bias=1.0, state_is_tuple=True)  # or True
+                fw_cell = tf.nn.rnn_cell.DropoutWrapper(fw_cell, output_keep_prob=keep_prob)
+                stacked_fw_rnn.append(fw_cell)
+            fw_multi_cell = tf.contrib.rnn.MultiRNNCell(cells=stacked_fw_rnn, state_is_tuple=True)
+            #fw_reset_state = fw_multi_cell.zero_state(self.batch_params.batch_size, dtype=tf.float32)
+            #fw_state = fw_reset_state
+
+            output, _ = tf.nn.dynamic_rnn(fw_multi_cell, x2, dtype=tf.float32)
+            # Select last output.
+            output = tf.transpose(output, [1, 0, 2])
+            fw_outputs = tf.gather(output, int(output.get_shape()[0]) - 1)
+            #fw_outputs = tf.reshape(fw_output, [-1, 128])
+
+        with tf.variable_scope('lstm2'):
+            stacked_bw_rnn = []
+            for bw_Lyr in range(2):
+                bw_cell = tf.contrib.rnn.BasicLSTMCell(128, forget_bias=1.0, state_is_tuple=True)  # or True
+                bw_cell = tf.nn.rnn_cell.DropoutWrapper(bw_cell, output_keep_prob=keep_prob)
+                stacked_bw_rnn.append(bw_cell)
+            bw_multi_cell = tf.contrib.rnn.MultiRNNCell(cells=stacked_bw_rnn, state_is_tuple=True)
+            #bw_reset_state = bw_multi_cell.zero_state(self.batch_params.batch_size, dtype=tf.float32)
+            #bw_state = bw_reset_state
+
+            bw_output, _ = tf.nn.dynamic_rnn(bw_multi_cell, x2, dtype=tf.float32)
+            # Select last output.
+            bw_output = tf.transpose(bw_output, [1, 0, 2])
+            bw_outputs = tf.gather(bw_output, int(bw_output.get_shape()[0]) - 1)
+
+
+        #outputs = fw_outputs[-1] + bw_outputs[-1]
+        outputs = fw_outputs + bw_outputs
+        outputs = tf.nn.dropout(outputs, keep_prob=keep_prob)
+        #x2 = layers.conv2d(x2, 32, 1, 1, activation_fn=tf.nn.elu)   # we can use conv2d 1x1 instead of dense
+        x3 = layers.fully_connected(outputs, 32, activation_fn=tf.nn.relu)
+
+
+        logits = layers.fully_connected(x3, num_classes, activation_fn=tf.nn.relu)
+
+
+        return logits
+

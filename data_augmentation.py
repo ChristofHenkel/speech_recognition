@@ -1,3 +1,21 @@
+"""
+TODO
+# Shifting the sound
+data_roll = np.roll(data, 1600)
+
+# stretching the sound
+def stretch(data, rate=1):
+    input_length = 16000
+    data = librosa.effects.time_stretch(data, rate)
+    if len(data)>input_length:
+        data = data[:input_length]
+    else:
+        data = np.pad(data, (0, max(0, input_length - len(data))), "constant")
+
+    return data
+
+"""
+
 from scipy.io import wavfile
 import numpy as np
 import os
