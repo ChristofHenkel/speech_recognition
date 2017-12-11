@@ -15,8 +15,8 @@ from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import average_precision_score
 from sklearn.metrics import precision_recall_curve
-import matplotlib.pyplot as plt
-from speech_recognition.silence_detection import SilenceDetector
+#import matplotlib.pyplot as plt
+from silence_detection import SilenceDetector
 
 # import matplotlib.pyplot as plt
 # from sklearn.preprocessing import StandardScaler, MinMaxScaler
