@@ -1,6 +1,6 @@
 import tensorflow as tf
 from batch_gen import SoundCorpus
-from architectures import Baseline7 as Model
+from architectures import Baseline8 as Model
 import os
 import logging
 from silence_detection import SilenceDetector
@@ -20,8 +20,8 @@ class BatchParams:
 
 cfg = Config()
 batch_params = BatchParams()
-#test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='own_test', fn='own_test_fname.p.soundcorpus.p')
-test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='test', fn='test.p.soundcorpus.p')
+test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='own_test', fn='own_test_fname.p.soundcorpus.p')
+#test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='test', fn='test.p.soundcorpus.p')
 silence_corpus = SoundCorpus(cfg.soundcorpus_dir, mode = 'silence', fn='silence.p.soundcorpus.p')
 SC = SilenceDetector()
 corpus_len = test_corpus._get_len()
@@ -41,7 +41,7 @@ decoder = silence_corpus.decoder
 encoder = silence_corpus.encoder
 num_classes = len(decoder) -1
 
-model = Model(cfg, batch_params)
+model = Model(cfg)
 
 # set_graph Graph
 graph = tf.Graph()
@@ -124,9 +124,9 @@ def acc():
     print('acc: %s' %acc)
     print('acc w/o silence: %s' % acc_no_silence)
 if __name__ == '__main__':
-    submission = prepare_submission(fn_model='models/model56/model_mfcc_bsize512_e47.ckpt', fn_out='submission_model56_ckpt_47.csv')
+    submission = prepare_submission(fn_model='models/model63/model_mfcc_bsize512_e49.ckpt')
     acc()
     #fn_model = 'models/model47/model_mfcc_bsize512_e49.ckpt'
+    # best: 'models/model56/model_mfcc_bsize512_e47.ckpt'
+    'models/model60/model_mfcc_bsize512_e49.ckpt'
 
-
-a = [(p,submission_own_test[p],submission[p]) for p in submission_own_test]

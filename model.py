@@ -14,30 +14,31 @@ import tensorflow as tf
 import time
 import logging
 import os
+import csv
+
 from architectures import Baseline8 as Baseline
 logging.basicConfig(level=logging.DEBUG)
 
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus12/'
-    logs_path = 'models/model61/'
+    model_name = 'model68'
+    logs_path = 'models/' + model_name + '/'
     max_ckpt_to_keep = 10
+
 
 class Hparams:
     is_training = True
     use_batch_norm = False
-    keep_prob = 0.8
+    keep_prob = 0.9
     max_gradient = 5
-    tf_seed = 7
+    tf_seed = 5
     learning_rate = 0.1
-    lr_decay_rate = 0.95
+    lr_decay_rate = 0.9
     lr_change_steps = 100
     epochs = 50
     epochs_per_save = 1
-    momentum = 0.1
-    #def save(self):
-    #    with open(self.logs_path + 'config.txt', 'w') as f:
-    #        pass
+    momentum = 0.2
 
 
 class DisplayParams:
@@ -55,7 +56,7 @@ class BatchParams:
     portion_noised = 1
     lower_bound_noise_mix = 0.5
     upper_bound_noise_mix = 1
-    noise_unknown = False
+    noise_unknown = True
     noise_silence = True
 
 
@@ -67,6 +68,8 @@ class Model:
         self.batch_params = BatchParams()
         self.display_params = DisplayParams()
 
+        if not os.path.exists(self.cfg.logs_path):
+            os.makedirs(self.cfg.logs_path)
         self.write_config()
 
         self.graph = tf.Graph()
@@ -89,7 +92,7 @@ class Model:
         self.decoder = self.infos['id2name']
         self.num_classes = len(self.decoder) - 1 #11
         self.training_iters = self.train_corpus.len
-
+        self.result = None
 
     def _load_infos(self):
         with open(self.cfg.soundcorpus_dir + 'infos.p', 'rb') as f:
@@ -106,6 +109,27 @@ class Model:
     def class2list(class_):
         class_list = [[item,class_.__dict__ [item]]for item in sorted(class_.__dict__ ) if not item.startswith('__')]
         return class_list
+
+    def get_config(self):
+        config_list = []
+        for line in self.class2list(Config):
+            config_list.append(line)
+        for line in self.class2list(Hparams):
+            config_list.append(line)
+        for line in self.class2list(DisplayParams):
+            config_list.append(line)
+        for line in self.class2list(BatchParams):
+            config_list.append(line)
+        return config_list
+
+    def add_experiment_to_csv(self):
+        with open('model_runs.csv','a') as csvfile:
+            writer = csv.writer(csvfile, delimiter=';',quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            config_list = self.get_config()
+            result_list = self.result
+            #writer.writerow([c[0] for c in config_list])
+            writer.writerow([c[1] for c in config_list] + [r[1] for r in result_list])
+
 
     def write_config(self):
         with open(os.path.join(self.cfg.logs_path, 'config.txt'), 'w') as f:
@@ -205,6 +229,7 @@ class Model:
                 print("validation:", c_val, acc_val)
 
             print("Optimization Finished!")
+            self.result = [['train_acc',acc],['val_acc',acc_val]]
         pass
 
     #def debug(self):
