@@ -25,8 +25,7 @@ class BaselineSilence:
         x2 = tf.reduce_max(x2, axis=[1, 2], keep_dims=True)
 
         x2 = layers.conv2d(x2, 32, 1, 1, activation_fn=tf.nn.elu)   # we can use conv2d 1x1 instead of dense
-
-        #x2 = layers.fully_connected(x2, 16, activation_fn=tf.nn.relu)
+        x2 = layers.fully_connected(x2, 16, activation_fn=tf.nn.relu)
         x2 = layers.fully_connected(x2, 8, activation_fn=tf.nn.relu)
         x2 = tf.nn.dropout(x2, keep_prob=keep_prob)
         x2 = layers.fully_connected(x2, num_classes, activation_fn=tf.nn.relu)
@@ -34,6 +33,35 @@ class BaselineSilence:
         logits = tf.squeeze(x2, [1, 2])
         return logits
 
+class BaselineSilence2:
+    """
+    Simple ConvNet with max Pooling
+    """
+
+    def __init__(self):
+        pass
+
+    def calc_logits(self,x,keep_prob,num_classes):
+
+
+        x2 = x
+        for i in [0,1]:
+            x2 = layers.conv2d(x2, num_outputs=  16 * 2**i, kernel_size=3, stride=1,
+                               activation_fn=tf.nn.elu
+                               )
+            x2 = layers.max_pool2d(x2, 2, 2)
+
+        # -> (512,1,1,32)
+        x2 = tf.reduce_mean(x2, axis=[1, 2], keep_dims=True)
+
+        x2 = layers.conv2d(x2, 32, 1, 1, activation_fn=tf.nn.elu)   # we can use conv2d 1x1 instead of dense
+        x2 = layers.fully_connected(x2, 16, activation_fn=tf.nn.relu)
+        x2 = layers.fully_connected(x2, 8, activation_fn=tf.nn.relu)
+        x2 = tf.nn.dropout(x2, keep_prob=keep_prob)
+        x2 = layers.fully_connected(x2, num_classes, activation_fn=tf.nn.relu)
+
+        logits = tf.squeeze(x2, [1, 2])
+        return logits
 
 class Model1:
 

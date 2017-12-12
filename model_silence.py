@@ -3,7 +3,7 @@ import glob
 import os
 from input_features import stacked_mfcc
 import time
-from architectures import BaselineSilence as Baseline
+from architectures import BaselineSilence2 as Baseline
 import tensorflow as tf
 from silence_detection import SilenceDetector
 
@@ -47,11 +47,13 @@ baseline = Baseline()
 #epochs = 40
 #keep_probability = 0.9
 #momentum = 0.1
-#lr_decay_rate = 0.5
+#lr_decay_rate = 0.8
 #lr_change_steps = 10
+# gardiendecent
+# BAselineSilence
 
-learning_rate = 0.005
-epochs = 40
+learning_rate = 0.01
+epochs = 41
 keep_probability = 0.9
 momentum = 0.1
 lr_decay_rate = 0.8
@@ -166,7 +168,7 @@ def train():
 
         print("Optimization Finished!")
         model_name = 'model__e%s.ckpt' %epoch
-        s_path = saver.save(sess, 'models/model_silence/' + model_name)
+        s_path = saver.save(sess, 'models/model_silence2/' + model_name)
         print("Model saved in file: %s" % s_path)
 
         #self.result = [['train_acc', acc], ['val_acc', acc_val]]
@@ -176,6 +178,6 @@ train()
 
 
 
-with tf.Session(graph=graph) as sess:
-    saver.restore(sess, 'models/model_silence/model__e39.ckpt')
-    logging.info('Start training')
+#with tf.Session(graph=graph) as sess:
+#    saver.restore(sess, 'models/model_silence/model__e39.ckpt')
+#    logging.info('Start training')
