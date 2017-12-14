@@ -16,13 +16,13 @@ import logging
 import os
 import csv
 
-from architectures import Baseline8 as Baseline
+from architectures import cnn_one_fpool3 as Baseline
 logging.basicConfig(level=logging.DEBUG)
 
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus12/'
-    model_name = 'model68'
+    model_name = 'model69'
     logs_path = 'models/' + model_name + '/'
     max_ckpt_to_keep = 10
 
@@ -36,7 +36,7 @@ class Hparams:
     learning_rate = 0.1
     lr_decay_rate = 0.9
     lr_change_steps = 100
-    epochs = 50
+    epochs = 5
     epochs_per_save = 1
     momentum = 0.2
 
@@ -50,7 +50,7 @@ class DisplayParams:
 class BatchParams:
     batch_size = 512
     do_mfcc = True  # batch will have dims (batch_size, 99, 13, 3)
-    dims_mfcc = (99, 13, 3)
+    dims_mfcc = (99, 26, 3)
     portion_unknown = 0.09
     portion_silence = 0
     portion_noised = 1
@@ -74,7 +74,7 @@ class Model:
 
         self.graph = tf.Graph()
         self.tf_seed = tf.set_random_seed(self.h_params.tf_seed)
-
+        self.batch_shape = (None,) + self.batch_params.dims_mfcc
         self.baseline = Baseline(self.h_params)
         self.infos = self._load_infos()
         self.train_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='train')
@@ -85,9 +85,14 @@ class Model:
         #self.silence_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='silence', fn='silence.p.soundcorpus.p')
 
 
-        self.advanced_gen = BatchGenerator(self.batch_params, self.train_corpus, self.noise_corpus, self.unknown_corpus,
-                                      SilenceCorpus=None)
+        self.advanced_gen = BatchGenerator(self.batch_params,
+                                           self.train_corpus,
+                                           self.noise_corpus,
+                                           self.unknown_corpus,
+                                           SilenceCorpus=None)
 
+        if True:
+            self.advanced_gen = self.corpus_gen('test.p')
         self.encoder = self.infos['name2id']
         self.decoder = self.infos['id2name']
         self.num_classes = len(self.decoder) - 1 #11
@@ -130,6 +135,49 @@ class Model:
             #writer.writerow([c[0] for c in config_list])
             writer.writerow([c[1] for c in config_list] + [r[1] for r in result_list])
 
+    def preprocess(self, fn = 'preprocessed_batch_corpus.p'):
+        batch_gen = self.advanced_gen.batch_gen()
+        with open(fn, 'wb') as f:
+            pickler = pickle.Pickler(f)
+            tic = time.time()
+
+            for epoch in range(self.h_params.epochs):
+                toc = time.time()
+                logging.info('epoch %s - time needed %s' %(epoch,toc-tic))
+                step = 1
+
+                # Keep training until reach max iterations
+                tic = time.time()
+
+                while step * self.batch_params.batch_size < self.training_iters:
+                    # for (batch_x,batch_y) in batch_gen:
+                    batch_x, batch_y = next(batch_gen)
+                    pickler.dump((batch_x, batch_y))
+                    step += 1
+
+    class corpus_gen:
+
+        def __init__(self,fn):
+            self.fn = fn
+
+        def gen_corpus(self):
+            with open(self.fn, 'rb') as f:
+                unpickler = pickle.Unpickler(f)
+                while True:
+                    data = unpickler.load()
+                    yield data
+
+        def batch_gen(self):
+            gen = self.gen_corpus()
+            while True:
+                try:
+                    batch = next(gen)
+
+                except EOFError:
+                    print('restarting gen')
+                    gen = self.gen_corpus()
+                    batch = next(gen)
+                yield batch
 
     def write_config(self):
         with open(os.path.join(self.cfg.logs_path, 'config.txt'), 'w') as f:
@@ -213,14 +261,14 @@ class Model:
                         print(c, acc)
                         if self.display_params.print_confusion_matrix:
                             print(cm)
-                        print(self.advanced_gen.batches_counter)
+                        #print(self.advanced_gen.batches_counter)
 
 
                     step += 1
                     global_step += 1
                 # if epoch % cfg.epochs_per_save == 0:
                 self.save(sess, epoch)
-                val_batch_gen = self.valid_corpus.batch_gen(self.len_valid, do_mfcc=True)
+                val_batch_gen = self.valid_corpus.batch_gen(self.len_valid, do_mfcc=True, mfcc_dims=self.batch_params.dims_mfcc)
                 val_batch_x, val_batch_y = next(val_batch_gen)
                 summary_val, c_val, acc_val = sess.run([self.summaries, self.cost, self.accuracy],
                                                        feed_dict={self.x: val_batch_x, self.y: val_batch_y,
@@ -248,7 +296,7 @@ class Model:
             # tf Graph input
 
             with tf.name_scope("Input"):
-                self.x = tf.placeholder(tf.float32, shape=(None, 99, 13, 3), name="input")
+                self.x = tf.placeholder(tf.float32, shape=self.batch_shape, name="input")
                 self.y = tf.placeholder(tf.int64, shape=(None,), name="input")
                 self.keep_prob = tf.placeholder(tf.float32, name="dropout")
 
