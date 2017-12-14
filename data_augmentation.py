@@ -111,5 +111,5 @@ def create_silence():
 
 if __name__ == '__main__':
 
-    # create_noise(fns,10,1,2)
+    create_noise(fns,10,1,2)
     create_silence()
