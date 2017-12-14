@@ -66,14 +66,27 @@ def process_speech2silence(wav, sample_rate=16000, window_duration=0.3):
     vad = webrtcvad.Vad()
     vad.set_mode(vad_mode)
     samples_per_window = int(window_duration * sample_rate + 0.5)
-    n_segment = int(window_duration / samples_per_window)
+    n_segment = int(len(wav) / samples_per_window)
     segmented_wav = []
     new_wav=[]
+    segmented_raw_wav = []
+    bytes_per_sample = 2
+    raw_wav = struct.pack("%dh" % len(wav), *wav)
     for i in range(n_segment):
-        segmented_wav[i] = wav[i*samples_per_window:(i+1)*samples_per_window]
-    is_speech = [vad.is_speech(vad.is_speech(x, sample_rate=sample_rate) for x in
-                               segmented_wav)]
-    for i,speech in enumerate(is_speech):
+        start = i * samples_per_window
+        stop = (i + 1) * samples_per_window
+        print(start, stop, len(wav))
+        if i < n_segment-1:
+            splitted_wav = wav[start:stop]
+            splitted_raw_wav = raw_wav[start*bytes_per_sample:stop*bytes_per_sample]
+        elif i == n_segment-1:
+            splitted_wav = wav[start:]
+            splitted_raw_wav = raw_wav[start*bytes_per_sample * bytes_per_sample:]
+        segmented_wav.append(splitted_wav)
+        segmented_raw_wav.append(splitted_raw_wav)
+    is_speech = [vad.is_speech(x, sample_rate=sample_rate) for x in
+                 segmented_raw_wav]
+    for i, speech in enumerate(is_speech):
         if not speech:
             new_wav= np.concatenate(new_wav,segmented_wav[i])
     return new_wav
