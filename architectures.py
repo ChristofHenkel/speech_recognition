@@ -16,7 +16,7 @@ class BaselineSilence:
 
         x2 = x
         for i in [0, 1]:
-            x2 = layers.conv2d(x2, num_outputs=  8 * 2**i, kernel_size=3, stride=1,
+            x2 = layers.conv2d(x2, num_outputs=  24 * 2**i, kernel_size=3, stride=1,
                                activation_fn=tf.nn.elu
                                )
             x2 = layers.max_pool2d(x2, 2, 2)
@@ -46,17 +46,83 @@ class BaselineSilence2:
 
         x2 = x
         for i in [0,1]:
-            x2 = layers.conv2d(x2, num_outputs=  16 * 2**i, kernel_size=3, stride=1,
+            x2 = layers.conv2d(x2, num_outputs=  16 * 2**i, kernel_size=(2,3), stride=1,
                                activation_fn=tf.nn.elu
                                )
-            x2 = layers.max_pool2d(x2, 2, 2)
-
+            x2 = layers.max_pool2d(x2, kernel_size=(2,4), stride=2)
+        print(x2)
         # -> (512,1,1,32)
-        x2 = tf.reduce_mean(x2, axis=[1, 2], keep_dims=True)
-
-        x2 = layers.conv2d(x2, 32, 1, 1, activation_fn=tf.nn.elu)   # we can use conv2d 1x1 instead of dense
+        x2 = tf.reduce_max(x2, axis=[1, 2], keep_dims=True)
+        #x2 = layers.conv2d(x2, 32, 1, 1, activation_fn=tf.nn.elu)
+        x2 = layers.conv2d(x2, 16, 1, 1, activation_fn=tf.nn.elu)   # we can use conv2d 1x1 instead of dense
+        x2 = layers.conv2d(x2, 16, 1, 1, activation_fn=tf.nn.elu)
         x2 = layers.fully_connected(x2, 16, activation_fn=tf.nn.relu)
         x2 = layers.fully_connected(x2, 8, activation_fn=tf.nn.relu)
+        x2 = tf.nn.dropout(x2, keep_prob=keep_prob)
+        x2 = layers.fully_connected(x2, num_classes, activation_fn=tf.nn.relu)
+
+        logits = tf.squeeze(x2, [1, 2])
+        return logits
+
+class cnn_one_fpool3:
+    """Builds a standard convolutional model.
+    This is roughly the network labeled as 'cnn-trad-fpool3' in the
+    'Convolutional Neural Networks for Small-footprint Keyword Spotting' paper:
+    http://www.isca-speech.org/archive/interspeech_2015/papers/i15_1478.pdf
+    """
+    def __init__(self,cfg):
+
+        pass
+
+    def calc_logits(self,x,keep_prob,num_classes):
+
+
+        x2 = x
+        x2 = layers.conv2d(x2, num_outputs=54, kernel_size=(6, 70), stride=1,activation_fn=tf.nn.elu)
+        x2 = layers.max_pool2d(x2, kernel_size=(3, 1), stride=1)
+
+
+
+        # -> (512,1,1,32)
+        x2 = tf.reduce_max(x2, axis=[1, 2], keep_dims=True)
+        #x2 = layers.conv2d(x2, 32, 1, 1, activation_fn=tf.nn.elu)
+        x2 = layers.conv2d(x2, 32, 1, 1, activation_fn=tf.nn.elu)   # we can use conv2d 1x1 instead of dense
+        #x2 = layers.conv2d(x2, 16, 1, 1, activation_fn=tf.nn.elu)
+        x2 = layers.fully_connected(x2, 64, activation_fn=tf.nn.relu)
+        x2 = layers.fully_connected(x2, 64, activation_fn=tf.nn.relu)
+        x2 = tf.nn.dropout(x2, keep_prob=keep_prob)
+        x2 = layers.fully_connected(x2, num_classes, activation_fn=tf.nn.relu)
+
+        logits = tf.squeeze(x2, [1, 2])
+        return logits
+
+class cnn_trad_fpool3:
+    """Builds a standard convolutional model.
+    This is roughly the network labeled as 'cnn-trad-fpool3' in the
+    'Convolutional Neural Networks for Small-footprint Keyword Spotting' paper:
+    http://www.isca-speech.org/archive/interspeech_2015/papers/i15_1478.pdf
+    """
+    def __init__(self):
+        pass
+
+    def calc_logits(self,x,keep_prob,num_classes):
+
+
+        x2 = x
+        x2 = layers.conv2d(x2, num_outputs=64, kernel_size=(8, 60), stride=1,activation_fn=tf.nn.elu)
+        x2 = layers.max_pool2d(x2, kernel_size=(3, 1), stride=1)
+        x2 = layers.conv2d(x2, num_outputs=64, kernel_size=(4, 30), stride=1,activation_fn=tf.nn.elu)
+        x2 = layers.max_pool2d(x2, kernel_size=(1, 1), stride=1)
+
+
+
+        # -> (512,1,1,32)
+        x2 = tf.reduce_max(x2, axis=[1, 2], keep_dims=True)
+        #x2 = layers.conv2d(x2, 32, 1, 1, activation_fn=tf.nn.elu)
+        x2 = layers.conv2d(x2, 32, 1, 1, activation_fn=tf.nn.elu)   # we can use conv2d 1x1 instead of dense
+        #x2 = layers.conv2d(x2, 16, 1, 1, activation_fn=tf.nn.elu)
+        x2 = layers.fully_connected(x2, 128, activation_fn=tf.nn.relu)
+        x2 = layers.fully_connected(x2, 128, activation_fn=tf.nn.relu)
         x2 = tf.nn.dropout(x2, keep_prob=keep_prob)
         x2 = layers.fully_connected(x2, num_classes, activation_fn=tf.nn.relu)
 

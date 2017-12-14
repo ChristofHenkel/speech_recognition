@@ -60,7 +60,7 @@ class SoundCorpus:
         print('label: ',str(data['label']))
         sd.play(wav,16000,blocking = True)
 
-    def batch_gen(self,batch_size, do_mfcc = False):
+    def batch_gen(self,batch_size, do_mfcc = False, mfcc_dims = None):
         x = []
         y = []
         with open(self.fp, 'rb') as file:
@@ -71,7 +71,7 @@ class SoundCorpus:
                 wav = item['wav']
                 label = item['label']
                 if do_mfcc:
-                    wav = stacked_mfcc(wav)
+                    wav = stacked_mfcc(wav,numcep=mfcc_dims[1], num_layers=mfcc_dims[2])
 
                 x.append(wav)
                 y.append(label)
