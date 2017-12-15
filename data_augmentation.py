@@ -90,7 +90,7 @@ def create_silence():
     noise_color_list = ["white", "pink", "blue", "brown", "violet"]
     noise_ratio = 0.5
     is_add_noise = True
-    for i,wav_files in enumerate(speech_training_files[:100]):
+    for i,wav_files in enumerate(speech_training_files):
         logging.log(logging.DEBUG,"wav:"+str(i)+"/"+str(n))
         wav_name = os.path.basename(wav_files)
         dir_name = os.path.basename(os.path.dirname(wav_files))
@@ -114,5 +114,5 @@ def create_silence():
 
 
 if __name__ == '__main__':
-    # create_noise(fns,10,1,2)
+    create_noise(fns,10,1,2)
     create_silence()
