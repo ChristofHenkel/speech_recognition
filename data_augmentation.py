@@ -21,95 +21,98 @@ import numpy as np
 import os
 import glob
 import webrtcvad
-import struct
-from silence_detection import *
+import logging
+import acoustics
+
+logging.basicConfig(level=logging.DEBUG)
 
 bn_dir = 'assets/train/audio/_background_noise_/'
 save_dir = 'assets/data_augmentation/silence/background/'
 fns = [fn for fn in os.listdir(bn_dir) if not fn.startswith('.')]
 fns = [fn for fn in fns if not fn.startswith('READ')]
 
-def create_noise(fns,factor,lower_bound_silence,upper_bound_silence):
 
+def create_noise(fns, factor, lower_bound_silence, upper_bound_silence):
     for fn in fns:
 
         _, wav = wavfile.read(bn_dir + fn)
         wav = wav.astype(np.float32) / np.iinfo(np.int16).max
         L = 16000
 
-        i = int(len(wav)/L)*factor
+        i = int(len(wav) / L) * factor
         for k in range(i):
-            b = np.random.randint(1,len(wav)-L)
-            wav_snip = wav[b:b+L]
-            wav_snip = wav_snip / np.random.uniform(lower_bound_silence,upper_bound_silence)
-            wavfile.write(save_dir + fn[:-4] + str(b) + '.wav',L,wav_snip)
+            b = np.random.randint(1, len(wav) - L)
+            wav_snip = wav[b:b + L]
+            wav_snip = wav_snip / np.random.uniform(lower_bound_silence,
+                                                    upper_bound_silence)
+            wavfile.write(save_dir + fn[:-4] + str(b) + '.wav', L, wav_snip)
 
+def get_noise_color(noise_color="white"):
+    return np.array((
+        (acoustics.generator.noise(16000 * 60, color=noise_color)) / 3) *
+                                32767).astype(np.int16)
 
- #
- # def is_silence(wav):
- #
- #
- #        samples_per_window = int(window_duration * 16000 + 0.5)
- #        bytes_per_sample = 2
- #        speech_analysis = []
- #        for start in np.arange(0, len(wav), samples_per_window):
- #            stop = min(start + samples_per_window, len(wav))
- #            is_speech = self.vad.is_speech(raw_samples[start * bytes_per_sample: stop * bytes_per_sample],
- #                                      sample_rate=16000)
- #            speech_analysis.append(is_speech)
- #
- #        speech_port = speech_analysis.count(True) / len(speech_analysis)
- #        return speech_port < self.speech_portion_threshold
-
-def process_speech2silence(wav, sample_rate=16000, window_duration=0.3):
+def get_silence_audio(wav_name, sample_rate=16000, window_duration=0.01):
+    fs, wav = wavfile.read(wav_name)
+    wav = wav.astype(np.float32) / np.iinfo(np.int16).max
     vad_mode = 1
     vad = webrtcvad.Vad()
     vad.set_mode(vad_mode)
     samples_per_window = int(window_duration * sample_rate + 0.5)
     n_segment = int(len(wav) / samples_per_window)
-    segmented_wav = []
-    new_wav=[]
-    segmented_raw_wav = []
-    bytes_per_sample = 2
-    raw_wav = struct.pack("%dh" % len(wav), *wav)
-    for i in range(n_segment):
+    new_wav = np.asarray([])
+    for i in range(n_segment-1):
+        #logging.log(logging.DEBUG,"segment:"+str(i)+"/"+str(n_segment))
         start = i * samples_per_window
-        stop = (i + 1) * samples_per_window
-        print(start, stop, len(wav))
-        if i < n_segment-1:
-            splitted_wav = wav[start:stop]
-            splitted_raw_wav = raw_wav[start*bytes_per_sample:stop*bytes_per_sample]
-        elif i == n_segment-1:
-            splitted_wav = wav[start:]
-            splitted_raw_wav = raw_wav[start*bytes_per_sample * bytes_per_sample:]
-        segmented_wav.append(splitted_wav)
-        segmented_raw_wav.append(splitted_raw_wav)
-    is_speech = [vad.is_speech(x, sample_rate=sample_rate) for x in
-                 segmented_raw_wav]
-    for i, speech in enumerate(is_speech):
-        if not speech:
-            new_wav= np.concatenate(new_wav,segmented_wav[i])
+        stop = (i+1) * samples_per_window
+        wav_bytes = wav[start:stop].tobytes()
+        is_speech = vad.is_speech(wav_bytes, sample_rate=sample_rate)
+        if not is_speech:
+            segmented_wav = np.asarray(wav[start:stop])
+            new_wav = np.concatenate((new_wav, segmented_wav), axis=0)
     return new_wav
 
+
+def add_noise(wav, noise_color='white', ratio=0.5):
+    noise = get_noise_color(noise_color)
+    noise = noise.astype(np.float32) / np.iinfo(np.int16).max
+    wav = wav + (ratio*noise[:len(wav)])
+    return wav
+
 def create_silence():
-    #bn_dir = 'assets/train/audio/_background_noise_/'
-    sd = SilenceDetector()
     train_dir = 'assets/train/audio/'
-    save_dir2 = 'assets/data_augmentation/silence/concatenate/'
-    all_training_files = glob.glob(os.path.join(train_dir,'*','*.wav'))
+    save_dir2 = 'assets/data_augmentation/silence/artificial_silence/'
+    all_training_files = glob.glob(os.path.join(train_dir, '*', '*.wav'))
     speech_training_files = [x for x in all_training_files if not
     os.path.dirname(x) + "/" == bn_dir]
     L = 16000
-    for wav_files in speech_training_files:
+    n = len(speech_training_files)
+    noise_color_list = ["white", "pink", "blue", "brown", "violet"]
+    noise_ratio = 0.5
+    is_add_noise = True
+    for i,wav_files in enumerate(speech_training_files[:100]):
+        logging.log(logging.DEBUG,"wav:"+str(i)+"/"+str(n))
         wav_name = os.path.basename(wav_files)
         dir_name = os.path.basename(os.path.dirname(wav_files))
-        wav = sd._read_wav_and_pad(wav_files)
-        new_wav = process_speech2silence(wav)
+        new_wav = get_silence_audio(wav_files)
+        len_new_wav = len(new_wav)
+        if len_new_wav < L:
+            new_wav = np.concatenate((new_wav, np.full((L-len_new_wav), 0,
+                                                       dtype=float)), axis=0)
+        elif len_new_wav > L:
+            new_wav = new_wav[:L]
+        if is_add_noise:
+            noise_color = np.random.choice(noise_color_list, 1)[0]
+            new_wav = add_noise(new_wav,noise_color, noise_ratio)
         new_wav_name = dir_name + "_" + wav_name
-        wavfile.write(os.path.join(save_dir2, new_wav_name, L, new_wav))
+        if is_add_noise:
+            print(wav_name, len(new_wav), noise_color)
+        else:
+            print(wav_name, len(new_wav))
+        wavfile.write(os.path.join(save_dir2, new_wav_name), L,
+                      new_wav.astype(np.float32))
 
 
 if __name__ == '__main__':
-
-    create_noise(fns,10,1,2)
+    # create_noise(fns,10,1,2)
     create_silence()
