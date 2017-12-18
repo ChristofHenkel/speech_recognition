@@ -41,18 +41,15 @@ def get_amplitude_phase(specgram):
 def stacked_mfcc(signal, num_layers = 3, numcep = 13):
     signal = mfcc(signal, samplerate=16000, winlen=0.025, winstep=0.01, numcep=numcep,
                   nfilt=26, nfft=512, lowfreq=0, highfreq=None, preemph=0.97,
-                  ceplifter=22, appendEnergy=True)
-
-    signal_stack = [signal]
+                  ceplifter=22, appendEnergy=True, winfunc=np.hamming)
+    signal -= (np.mean(signal, axis=0) + 1e-8)
+    signal_stack = np.expand_dims(signal, axis=2)
 
     for k in range(num_layers-1):
-        delta_ = delta(signal_stack[k],N=1)
-        signal_stack.append(delta_)
+        delta_ = delta(signal_stack[:,:,k],N=1)
+        delta_ = np.expand_dims(delta_, axis=2)
+        signal_stack = np.concatenate((signal_stack, delta_), axis=2)
 
-    if num_layers-1 > 0:
-        signal_stack = np.stack(signal_stack, axis=2)
-    else:
-        signal_stack = signal
 
     return signal_stack
 

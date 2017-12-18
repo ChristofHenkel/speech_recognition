@@ -312,7 +312,7 @@ class SilenceDetector:
         plt.show()
 
     def is_silence(self,wav):
-
+        print(len(wav))
         raw_samples = struct.pack("%dh" % len(wav), *wav)
         samples_per_window = int(self.window_duration * 16000 + 0.5)
         bytes_per_sample = 2
@@ -323,6 +323,23 @@ class SilenceDetector:
                                       sample_rate=16000)
             speech_analysis.append(is_speech)
 
+        speech_port = speech_analysis.count(True) / len(speech_analysis)
+        return speech_port < self.speech_portion_threshold
+
+    def is_silence2(self,wav):
+        wav = np.asarray(wav, dtype=np.int16)
+        window_duration = 0.01
+        samples_per_window = int(window_duration * 16000 + 0.5)
+        speech_analysis = []
+        n_segment = int(len(wav) / samples_per_window)
+        for i in range(n_segment - 1):
+            # logging.log(logging.DEBUG,"segment:"+str(i)+"/"+str(n_segment))
+            start = i * samples_per_window
+            stop = (i + 1) * samples_per_window
+            #wav_bytes = np.int16(wav[start:stop] * 32768).tobytes()
+            wav_bytes = wav[start:stop].tobytes()
+            is_speech = self.vad.is_speech(wav_bytes, sample_rate=16000)
+            speech_analysis.append(is_speech)
         speech_port = speech_analysis.count(True) / len(speech_analysis)
         return speech_port < self.speech_portion_threshold
 

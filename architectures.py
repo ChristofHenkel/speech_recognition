@@ -38,7 +38,7 @@ class BaselineSilence2:
     Simple ConvNet with max Pooling
     """
 
-    def __init__(self):
+    def __init__(self, cfg):
         pass
 
     def calc_logits(self,x,keep_prob,num_classes):
@@ -80,7 +80,8 @@ class cnn_one_fpool3:
         x2 = x
         x2 = layers.conv2d(x2, num_outputs=54, kernel_size=(6, 70), stride=1,activation_fn=tf.nn.elu)
         x2 = layers.max_pool2d(x2, kernel_size=(3, 1), stride=1)
-
+        x2 = layers.conv2d(x2, num_outputs=54, kernel_size=(3, 35), stride=1,activation_fn=tf.nn.elu)
+        x2 = layers.max_pool2d(x2, kernel_size=(2, 1), stride=1)
 
 
         # -> (512,1,1,32)

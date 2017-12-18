@@ -129,37 +129,6 @@ class BatchGenerator:
                 data = unpickler.load()
                 yield data
 
-    # to be deleted
-    def gen_train(self):
-        with open(self.train_corpus.fp, 'rb') as f:
-            unpickler = pickle.Unpickler(f)
-            while True:
-                data = unpickler.load()
-                yield data
-
-    # to be deleted
-    def gen_bg(self):
-        with open(self.background_corpus.fp, 'rb') as f:
-            unpickler = pickle.Unpickler(f)
-            while True:
-                data = unpickler.load()
-                yield data
-
-    # to be deleted
-    def gen_unknown(self):
-        with open(self.unknown_corpus.fp, 'rb') as f:
-            unpickler = pickle.Unpickler(f)
-            while True:
-                data = unpickler.load()
-                yield data
-
-    # to be deleted
-    def gen_silence(self):
-        with open(self.silence_corpus.fp, 'rb') as f:
-            unpickler = pickle.Unpickler(f)
-            while True:
-                data = unpickler.load()
-                yield data
 
     def batch_gen(self):
         x = []
@@ -209,7 +178,7 @@ class BatchGenerator:
             raw_wav = train_data['wav']
             noise_wav = noise['wav']
             label = train_data['label']
-            factor_mix = np.random.uniform(self.lower_bound_noise_mix,self.upper_bound_noise_mix)
+            factor_mix = 1- np.random.uniform(self.lower_bound_noise_mix,self.upper_bound_noise_mix)
             if np.random.rand() < self.portion_noised:
                 if type is 'silence':
                     if self.noise_silence:

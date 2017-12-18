@@ -1,47 +1,70 @@
 import tensorflow as tf
 from batch_gen import SoundCorpus
-from architectures import Baseline8 as Model
+from architectures import cnn_one_fpool3 as Baseline
 import os
 import logging
 from silence_detection import SilenceDetector
 from input_features import stacked_mfcc
 import pickle
+import numpy as np
 logging.basicConfig(level=logging.INFO)
 
 class Config:
-    soundcorpus_dir = 'assets/corpora/corpus12/'
+    soundcorpus_dir = 'assets/corpora/corpus13/'
     batch_size = 1
     is_training = False
     use_batch_norm = False
     keep_prob = 1
+    test_mode = 'valid'
+    num_classes = 11
+    dims_mfcc = (99,13,1)
 
-class BatchParams:
-    batch_size = 512
+
+def load_corpus(cfg):
+    if cfg.test_mode == 'own_test':
+        test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='own_test', fn='own_test_fname.p.soundcorpus.p')
+    elif cfg.test_mode == 'test':
+        test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='test', fn='test.p.soundcorpus.p')
+    elif cfg.test_mode == 'valid':
+        test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode = 'valid', fn = 'valid.p.soundcorpus.p')
+    else:
+        test_corpus = None
+    return test_corpus
+
+
+def get_num_batches_rest_batch(test_corpus, batch_size):
+    corpus_len = test_corpus._get_len()
+    if batch_size > 1:
+        rest = corpus_len % batch_size
+    else:
+        rest = 0
+    num_batches = (corpus_len - rest) / batch_size
+    print('calculated number of batches: %s' %num_batches)
+    num_batches = int(num_batches)
+    if rest > 0:
+        rest_batch = [b for b in test_corpus][-rest:]
+    else:
+        rest_batch = []
+    return num_batches, rest_batch
+
+def load_encoder_decoder(cfg):
+
+    with open(cfg.soundcorpus_dir + 'infos.p','rb') as f:
+        content = pickle.load(f)
+        decoder = content['id2name']
+        encoder = content['name2id']
+    return decoder, encoder
 
 cfg = Config()
-batch_params = BatchParams()
-test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='own_test', fn='own_test_fname.p.soundcorpus.p')
-#test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='test', fn='test.p.soundcorpus.p')
-silence_corpus = SoundCorpus(cfg.soundcorpus_dir, mode = 'silence', fn='silence.p.soundcorpus.p')
-SC = SilenceDetector()
-corpus_len = test_corpus._get_len()
-if cfg.batch_size > 1:
-    rest = corpus_len % cfg.batch_size
-else:
-    rest = 0
-num_batches = (corpus_len - rest) / cfg.batch_size
-print('calculated number of batches: %s' %num_batches)
-num_batches = int(num_batches)
-batch_gen = test_corpus.batch_gen(cfg.batch_size)
-if rest > 0:
-    rest_batch = [b for b in test_corpus][-rest:]
-else:
-    rest_batch = []
-decoder = silence_corpus.decoder
-encoder = silence_corpus.encoder
-num_classes = len(decoder) -1
+test_corpus = load_corpus(cfg)
+num_batches, rest_batch = get_num_batches_rest_batch(test_corpus,cfg.batch_size)
+decoder, encoder = load_encoder_decoder(cfg)
 
-model = Model(cfg)
+SC = SilenceDetector()
+batch_gen = test_corpus.batch_gen(cfg.batch_size)
+
+
+baseline = Baseline(cfg)
 
 # set_graph Graph
 graph = tf.Graph()
@@ -50,53 +73,55 @@ with graph.as_default():
     # tf Graph input
     tf.set_random_seed(3)
     with tf.name_scope("Input"):
-        x = tf.placeholder(tf.float32, shape=(None, 99, 13, 3), name="input")
+        x = tf.placeholder(tf.float32, shape=(None,) + cfg.dims_mfcc, name="input")
         y = tf.placeholder(tf.int64, shape=(None,), name="input")
         keep_prob = tf.placeholder(tf.float32, name="dropout")
     with tf.variable_scope('logit'):
-        logits = model.calc_logits(x, keep_prob, num_classes)
+        logits = baseline.calc_logits(x, keep_prob, cfg.num_classes)
         pred = tf.argmax(logits, 1)
     saver = tf.train.Saver()
 
 def prepare_submission(fn_model,fn_out=None):
     #batch_x = [b['wav'] for b in batch]
     #batch_y = [b['label'] for b in batch]
-
-    submission = dict()
-
+    if cfg.test_mode in ['test','own_test']:
+        submission = dict()
+    else:
+        submission = []
     with tf.Session(graph=graph) as sess:
         # Restore variables from disk.
         saver.restore(sess, fn_model)
         print("Model restored.")
 
-        #k_batch = 0
+
         for k_batch in range(num_batches):
             try:
                 batch_x, batch_y = next(batch_gen)
 
 
-                batch_x2 = [stacked_mfcc(b) for b in batch_x]
+                batch_x2 = np.asarray([stacked_mfcc(b, numcep=cfg.dims_mfcc[1], num_layers=cfg.dims_mfcc[2]) for b in batch_x])
 
                 if k_batch % 10 == 0:
                     logging.info('Batch %s / %s' %(k_batch+1,num_batches))
-                prediction = sess.run([pred], feed_dict={x: batch_x2, keep_prob: 1.0})
-                for k,p in enumerate(prediction[0]):
-                    if SC.is_silence(batch_x[k]):
-                        if test_corpus.mode == 'test':
-                            fname, label = batch_y[k].decode(), 'silence'
-                        else:
-                            fname, label = batch_y[k], 'silence'
+                prediction = sess.run(pred, feed_dict={x: batch_x2, keep_prob: 1.0})
+                for k,p in enumerate(prediction):
+                    try:
+                        is_silence = SC.is_silence2(batch_x[k])
+                    except:
+                        is_silence = False
+                        logging.warning('vad error in file %s - %s' %(k_batch,k))
+                    if is_silence:
+                        fname, label = batch_y[k], 'silence'
                     else:
-                        if test_corpus.mode == 'test':
-                            fname, label = batch_y[k].decode(), decoder[p]
-                        else:
-                            fname, label = batch_y[k], decoder[p]
-                    submission[fname] = label
-                #k_batch += 1
+                        fname, label = batch_y[k], decoder[p]
+                    if cfg.test_mode in ['test','own_test']:
+                        submission[fname] = label
+                    else:
+                        submission.append((fname,label))
             except EOFError:
                 pass
         for b in rest_batch:
-            fname, label = b['label'].decode(), 'unknown'
+            fname, label = b['label'], 'unknown'
             submission[fname] = label
 
 
@@ -107,10 +132,13 @@ def prepare_submission(fn_model,fn_out=None):
                     fout.write('{},{}\n'.format(fname, label))
     return submission
 
-def acc():
+def acc(submission):
     with open(cfg.soundcorpus_dir + 'fname2label.p', 'rb') as f:
         fname2label = pickle.load(f)
-    comparison = [(p,submission[p],decoder[fname2label[p]]) for p in submission]
+    if cfg.test_mode in ['test','own_test']:
+        comparison = [(p,submission[p],decoder[fname2label[p]]) for p in submission]
+    else:
+        comparison = [('_', decoder[p[0]], p[1]) for p in submission]
     acc = [a[1] == a[2] for a in comparison].count(True)/len(comparison)
     no_silence = [c for c in comparison if c[2] != 'silence']
     acc_dict = {}
@@ -124,9 +152,10 @@ def acc():
     print('acc: %s' %acc)
     print('acc w/o silence: %s' % acc_no_silence)
 if __name__ == '__main__':
-    submission = prepare_submission(fn_model='models/model63/model_mfcc_bsize512_e49.ckpt')
-    acc()
+    submission = prepare_submission(fn_model='models/tesla_k80_1/model_mfcc_bsize512_e49.ckpt')
+    acc(submission)
     #fn_model = 'models/model47/model_mfcc_bsize512_e49.ckpt'
     # best: 'models/model56/model_mfcc_bsize512_e47.ckpt'
-    'models/model60/model_mfcc_bsize512_e49.ckpt'
+    #'models/model60/model_mfcc_bsize512_e49.ckpt'
+    #fn_model= 'models/tesla_k80_1/model_mfcc_bsize512_e48.ckpt'
 

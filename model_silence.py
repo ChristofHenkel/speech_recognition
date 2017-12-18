@@ -16,8 +16,8 @@ speech_fnames = [x for x in glob.glob(all_train_pathnames) if
 
 ##################### Load data set
 X_train, X_test, y_train, y_test, ss = get_balanced_corpus(silence_fnames,speech_fnames,8000,0.5, is_split=True)
-X_train = np.asarray([stacked_mfcc(x) for x in X_train])
-X_test = np.asarray([stacked_mfcc(x) for x in X_test])
+X_train = np.asarray([stacked_mfcc(x, numcep=26) for x in X_train])
+X_test = np.asarray([stacked_mfcc(x, numcep=26) for x in X_test])
 
 print('Input dims: ')
 print(X_train.shape)
@@ -31,7 +31,7 @@ test_corpus = SoundCorpus('assets/corpora/corpus12/', mode='own_test', fn='own_t
 SC = SilenceDetector()
 
 test_data = [d for d in test_corpus if not SC.is_silence(d['wav'])]
-X_own_test = [stacked_mfcc(d['wav']) for d in test_data]
+X_own_test = [stacked_mfcc(d['wav'],numcep=26) for d in test_data]
 y_own_test = [0 if fname2label[d['label']] == 11 else 1 for d in test_data]
 
 decoder = {0: 'silence',
@@ -52,12 +52,12 @@ baseline = Baseline()
 # gardiendecent
 # BAselineSilence
 
-learning_rate = 0.01
-epochs = 41
-keep_probability = 0.9
+learning_rate = 0.001
+epochs = 31
+keep_probability = 0.8
 momentum = 0.1
-lr_decay_rate = 0.8
-lr_change_steps = 10
+lr_decay_rate = 0.5
+lr_change_steps = 20
 
 
 #display Params
@@ -67,7 +67,7 @@ with graph.as_default():
     # tf Graph input
     tf.set_random_seed(1)
     with tf.name_scope("Input"):
-        x = tf.placeholder(tf.float32, shape=(None, 99, 13, 3), name="input")
+        x = tf.placeholder(tf.float32, shape=(None, 99, 26, 3), name="input")
         y = tf.placeholder(tf.int64, shape=(None,), name="input")
         keep_prob = tf.placeholder(tf.float32, name="dropout")
 
@@ -77,7 +77,8 @@ with graph.as_default():
     with tf.variable_scope('costs'):
         xent = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=logits)
         cost = tf.reduce_mean(xent, name='xent')
-        tf.summary.scalar('cost', cost)
+
+        #tf.summary.scalar('cost', cost)
 
     with tf.variable_scope('acc'):
         pred = tf.argmax(logits, 1)
@@ -85,11 +86,11 @@ with graph.as_default():
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name='accu')
         confusion_matrix = tf.confusion_matrix(tf.reshape(y, [-1]), pred, num_classes)
         tf.summary.scalar('accuracy', accuracy)
+
     with tf.variable_scope('acc_per_class'):
         for i in range(num_classes):
             acc_id = confusion_matrix[i, i] / tf.reduce_sum(confusion_matrix[i, :])
             tf.summary.scalar(decoder[i], acc_id)
-
     # train ops
     gradients = tf.gradients(cost, tf.trainable_variables())
     tf.summary.scalar('grad_norm', tf.global_norm(gradients))

@@ -16,15 +16,16 @@ import logging
 import os
 import csv
 
-from architectures import cnn_one_fpool3 as Baseline
+from architectures import BaselineSilence2 as Baseline
 logging.basicConfig(level=logging.DEBUG)
 
 
 class Config:
-    soundcorpus_dir = 'assets/corpora/corpus12/'
-    model_name = 'model69'
+    soundcorpus_dir = 'assets/corpora/corpus14/'
+    model_name = 'tmp_model69'
     logs_path = 'models/' + model_name + '/'
     max_ckpt_to_keep = 10
+    preprocessed = False
 
 
 class Hparams:
@@ -33,7 +34,7 @@ class Hparams:
     keep_prob = 0.9
     max_gradient = 5
     tf_seed = 5
-    learning_rate = 0.1
+    learning_rate = 0.01
     lr_decay_rate = 0.9
     lr_change_steps = 100
     epochs = 5
@@ -50,12 +51,12 @@ class DisplayParams:
 class BatchParams:
     batch_size = 512
     do_mfcc = True  # batch will have dims (batch_size, 99, 13, 3)
-    dims_mfcc = (99, 26, 3)
+    dims_mfcc = (99, 13, 3)
     portion_unknown = 0.09
     portion_silence = 0
     portion_noised = 1
-    lower_bound_noise_mix = 0.5
-    upper_bound_noise_mix = 1
+    lower_bound_noise_mix = 0
+    upper_bound_noise_mix = 0.5
     noise_unknown = True
     noise_silence = True
 
@@ -78,10 +79,10 @@ class Model:
         self.baseline = Baseline(self.h_params)
         self.infos = self._load_infos()
         self.train_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='train')
-        self.valid_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='valid', fn='valid.p.soundcorpus.p')
+        self.valid_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='valid', fn='valid.pf.soundcorpus.p')
         self.len_valid = self.valid_corpus._get_len()
-        self.noise_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='background', fn='background.p.soundcorpus.p')
-        self.unknown_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='unknown', fn='unknown.p.soundcorpus.p')
+        self.noise_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='background', fn='background.pf.soundcorpus.p')
+        self.unknown_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='unknown', fn='unknown.pf.soundcorpus.p')
         #self.silence_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='silence', fn='silence.p.soundcorpus.p')
 
 
@@ -91,7 +92,7 @@ class Model:
                                            self.unknown_corpus,
                                            SilenceCorpus=None)
 
-        if True:
+        if self.cfg.preprocessed:
             self.advanced_gen = self.corpus_gen('test.p')
         self.encoder = self.infos['name2id']
         self.decoder = self.infos['id2name']
