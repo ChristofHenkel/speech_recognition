@@ -78,9 +78,9 @@ class cnn_one_fpool3:
 
 
         x2 = x
-        x2 = layers.conv2d(x2, num_outputs=54, kernel_size=(6, 70), stride=1,activation_fn=tf.nn.elu)
+        x2 = layers.conv2d(x2, num_outputs=54, kernel_size=(4, 70), stride=1,activation_fn=tf.nn.elu)
         x2 = layers.max_pool2d(x2, kernel_size=(3, 1), stride=1)
-        x2 = layers.conv2d(x2, num_outputs=54, kernel_size=(3, 35), stride=1,activation_fn=tf.nn.elu)
+        x2 = layers.conv2d(x2, num_outputs=54, kernel_size=(2, 35), stride=1,activation_fn=tf.nn.elu)
         x2 = layers.max_pool2d(x2, kernel_size=(2, 1), stride=1)
 
 
