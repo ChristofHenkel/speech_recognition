@@ -1,9 +1,8 @@
 import os
 import pickle
 import numpy as np
-from python_speech_features import mfcc, delta
 import sounddevice as sd
-from input_features import stacked_mfcc
+from input_features import stacked_mfcc, stacked_filterbank
 
 class SoundCorpus:
 
@@ -60,7 +59,7 @@ class SoundCorpus:
         print('label: ',str(data['label']))
         sd.play(wav,16000,blocking = True)
 
-    def batch_gen(self,batch_size, do_mfcc = False, mfcc_dims = None):
+    def batch_gen(self,batch_size, input_transformation = 'filterbank', dims_input_transformation = (99,26,1)):
         x = []
         y = []
         with open(self.fp, 'rb') as file:
@@ -70,8 +69,12 @@ class SoundCorpus:
                 item = unpickler.load()
                 wav = item['wav']
                 label = item['label']
-                if do_mfcc:
-                    wav = stacked_mfcc(wav,numcep=mfcc_dims[1], num_layers=mfcc_dims[2])
+                if input_transformation == 'mfcc':
+                    wav = stacked_mfcc(wav,numcep=dims_input_transformation[1], num_layers=dims_input_transformation[2])
+                elif input_transformation == 'filterbank':
+                    wav = stacked_filterbank(wav, nfilt=dims_input_transformation[1], num_layers=dims_input_transformation[2])
+                else:
+                    wav = wav
 
                 x.append(wav)
                 y.append(label)
@@ -101,10 +104,9 @@ class BatchGenerator:
         self.upper_bound_noise_mix = BatchParams.upper_bound_noise_mix
         self.noise_unknown = BatchParams.noise_unknown
         self.noise_silence = BatchParams.noise_silence
-        self.do_mfcc = BatchParams.do_mfcc
+        self.input_transformation = BatchParams.input_transformation
+        self.dims_input_transformation = BatchParams.dims_input_transformation
         self.all_gen = self.batch_gen()
-        self.dims_mfcc = BatchParams.dims_mfcc
-
         self.batches_counter = 0
 
 
@@ -136,8 +138,8 @@ class BatchGenerator:
         gen_train = self.gen_corpus(self.train_corpus.fp)
         gen_noise = self.gen_corpus(self.background_corpus.fp)
         gen_unknown = self.gen_corpus(self.unknown_corpus.fp)
-        # gen_silence = self.gen_corpus(self.silence_corpus.fp)
-        gen_silence = None
+        gen_silence = self.gen_corpus(self.background_corpus.fp)
+        #gen_silence = None
 
         while True:
             type = np.random.choice(['known', 'unknown', 'silence'],
@@ -166,7 +168,7 @@ class BatchGenerator:
 
                 except EOFError:
                     print('restarting gen_silence')
-                    gen_silence = self.gen_corpus(self.silence_corpus.fp)
+                    gen_silence = self.gen_corpus(self.background_corpus.fp)
                     train_data = next(gen_silence)
             try:
                 noise = next(gen_noise)
@@ -194,8 +196,10 @@ class BatchGenerator:
                         wav = raw_wav
             else:
                 wav = raw_wav
-            if self.do_mfcc:
-                signal = stacked_mfcc(wav,num_layers=self.dims_mfcc[2],numcep=self.dims_mfcc[1])
+            if self.input_transformation == 'mfcc':
+                signal = stacked_mfcc(wav, num_layers=self.dims_input_transformation[2], numcep=self.dims_input_transformation[1])
+            elif self.input_transformation == 'filterbank':
+                signal = stacked_filterbank(wav, num_layers=self.dims_input_transformation[2], nfilt=self.dims_input_transformation[1])
             else:
                 signal = wav
             x.append(signal)

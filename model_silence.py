@@ -1,28 +1,45 @@
 from silence_svm import *
 import glob
 import os
+import random
 from input_features import stacked_mfcc
 import time
-from architectures import cnn_one_fpool3 as Baseline
+from architectures import cnn_one_fpool3_rnn as Baseline
 import tensorflow as tf
 from silence_detection import SilenceDetector
 
 silence_pathnames = 'assets/data_augmentation/silence/background/*.wav'
-silence2_pathnames = 'assets/data_augmentation/silence/artificial_silence3/*.wav'
-
+silence2_pathnames = 'assets/data_augmentation/silence/artificial_silence/*.wav'
+silence3_pathnames = 'assets/data_augmentation/silence/artificial_silence3/*.wav'
 all_train_pathnames = 'assets/train/audio/*/*wav'
 bn_dir = "assets/train/audio/_background_noise_/"
+
+silence_composition = [0.3,0.3,0.4]
 silence_fnames = glob.glob(silence_pathnames)
-root = 'assets/data_augmentation/silence/artificial_silence3/'
-silence2_fnames = [fn for fn in os.listdir(root) if fn.endswith('.wav')]
 
+amount_silence2 = int(len(silence_fnames) / silence_composition[0] * silence_composition[1])
+amount_silence3 = int(len(silence_fnames) / silence_composition[0] * silence_composition[2])
+root = 'assets/data_augmentation/silence/'
+silence2_fnames = [root + 'artificial_silence/' + fn for fn in os.listdir(root + 'artificial_silence/') if fn.endswith('.wav')]
+random.shuffle(silence2_fnames)
+silence2_fnames = silence2_fnames[:amount_silence2]
+silence3_fnames = [root + 'artificial_silence3/' + fn for fn in os.listdir(root + 'artificial_silence3/') if fn.endswith('.wav')]
+random.shuffle(silence3_fnames)
+silence3_fnames = silence3_fnames[:amount_silence3]
 
+silence_fnames.extend(silence2_fnames)
+silence_fnames.extend(silence3_fnames)
 
 speech_fnames = [x for x in glob.glob(all_train_pathnames) if
                  os.path.dirname(x) is not bn_dir]
 
 ##################### Load data set
-X_train, X_test, y_train, y_test, ss = get_balanced_corpus(silence_fnames,speech_fnames,8000,0.5, is_split=True)
+percentage_of_speech=0.5
+num_of_data = int(len(silence_fnames) + len(silence2_fnames) + len(silence3_fnames) / percentage_of_speech)
+
+
+
+X_train, X_test, y_train, y_test, ss = get_balanced_corpus(silence_fnames,speech_fnames,num_of_data,percentage_of_speech, is_split=True)
 X_train = np.asarray([stacked_mfcc(x, numcep=26) for x in X_train])
 X_test = np.asarray([stacked_mfcc(x, numcep=26) for x in X_test])
 
@@ -32,12 +49,12 @@ print(X_train.shape)
 from batch_gen import SoundCorpus
 import pickle
 
-with open('assets/corpora/corpus12/' + 'fname2label.p', 'rb') as f:
+with open('assets/corpora/corpus14/' + 'fname2label.p', 'rb') as f:
     fname2label = pickle.load(f)
-test_corpus = SoundCorpus('assets/corpora/corpus12/', mode='own_test', fn='own_test_fname.p.soundcorpus.p')
+test_corpus = SoundCorpus('assets/corpora/corpus14/', mode='own_test', fn='own_test_fname.p.soundcorpus.p')
 SC = SilenceDetector()
 
-test_data = [d for d in test_corpus if not SC.is_silence(d['wav'])]
+test_data = [d for d in test_corpus if not SC.is_silence2(d['wav'])]
 X_own_test = [stacked_mfcc(d['wav'],numcep=26) for d in test_data]
 y_own_test = [0 if fname2label[d['label']] == 11 else 1 for d in test_data]
 
@@ -46,7 +63,10 @@ decoder = {0: 'silence',
 
 num_classes = 2
 graph = tf.Graph()
-baseline = Baseline()
+class Config:
+    a = ''
+cfg = Config()
+baseline = Baseline(cfg)
 
 
 # H Params
@@ -61,9 +81,9 @@ baseline = Baseline()
 
 learning_rate = 0.001
 epochs = 31
-keep_probability = 0.8
+keep_probability = 0.9
 momentum = 0.1
-lr_decay_rate = 0.5
+lr_decay_rate = 0.90
 lr_change_steps = 20
 
 
@@ -110,7 +130,7 @@ with graph.as_default():
     steps_ = tf.Variable(lr_change_steps, dtype=tf.int64, name="setps_", trainable=False)
     lr = tf.train.exponential_decay(lr_, iteration, steps_, decay, staircase=True)
     #tf.summary.scalar('learning_rate', lr)
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=lr).apply_gradients(
+    optimizer = tf.train.AdamOptimizer(learning_rate=lr).apply_gradients(
         zip(gradients, tf.trainable_variables()),
         name="train_step",
         global_step=iteration)

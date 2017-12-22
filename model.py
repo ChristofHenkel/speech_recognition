@@ -16,13 +16,13 @@ import logging
 import os
 import csv
 
-from architectures import BaselineSilence2 as Baseline
+from architectures import cnn_one_fpool3_rnn as Baseline
 logging.basicConfig(level=logging.DEBUG)
 
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus14/'
-    model_name = 'tmp_model69'
+    model_name = 'tmp_model70'
     logs_path = 'models/' + model_name + '/'
     max_ckpt_to_keep = 10
     preprocessed = False
@@ -34,12 +34,12 @@ class Hparams:
     keep_prob = 0.9
     max_gradient = 5
     tf_seed = 5
-    learning_rate = 0.01
+    learning_rate = 0.001
     lr_decay_rate = 0.9
     lr_change_steps = 100
     epochs = 5
     epochs_per_save = 1
-    momentum = 0.2
+    #momentum = 0.2
 
 
 class DisplayParams:
@@ -50,10 +50,10 @@ class DisplayParams:
 
 class BatchParams:
     batch_size = 512
-    do_mfcc = True  # batch will have dims (batch_size, 99, 13, 3)
-    dims_mfcc = (99, 13, 3)
+    input_transformation = 'filterbank'  # mfcc, filterbank, None
+    dims_input_transformation = (99, 26, 1) #nframes, nfilt, num_layers
     portion_unknown = 0.09
-    portion_silence = 0
+    portion_silence = 0.09
     portion_noised = 1
     lower_bound_noise_mix = 0
     upper_bound_noise_mix = 0.5
@@ -75,7 +75,7 @@ class Model:
 
         self.graph = tf.Graph()
         self.tf_seed = tf.set_random_seed(self.h_params.tf_seed)
-        self.batch_shape = (None,) + self.batch_params.dims_mfcc
+        self.batch_shape = (None,) + self.batch_params.dims_input_transformation
         self.baseline = Baseline(self.h_params)
         self.infos = self._load_infos()
         self.train_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='train')
@@ -96,7 +96,10 @@ class Model:
             self.advanced_gen = self.corpus_gen('test.p')
         self.encoder = self.infos['name2id']
         self.decoder = self.infos['id2name']
-        self.num_classes = len(self.decoder) - 1 #11
+        if self.batch_params.portion_silence == 0:
+            self.num_classes = len(self.decoder) - 1 #11
+        else:
+            self.num_classes = len(self.decoder)
         self.training_iters = self.train_corpus.len
         self.result = None
 
@@ -269,7 +272,9 @@ class Model:
                     global_step += 1
                 # if epoch % cfg.epochs_per_save == 0:
                 self.save(sess, epoch)
-                val_batch_gen = self.valid_corpus.batch_gen(self.len_valid, do_mfcc=True, mfcc_dims=self.batch_params.dims_mfcc)
+                val_batch_gen = self.valid_corpus.batch_gen(self.batch_params.batch_size,
+                                                            input_transformation='filterbank',
+                                                            dims_input_transformation=self.batch_params.dims_input_transformation)
                 val_batch_x, val_batch_y = next(val_batch_gen)
                 summary_val, c_val, acc_val = sess.run([self.summaries, self.cost, self.accuracy],
                                                        feed_dict={self.x: val_batch_x, self.y: val_batch_y,
@@ -334,7 +339,7 @@ class Model:
             steps_ = tf.Variable(self.h_params.lr_change_steps, dtype=tf.int64, name="setps_", trainable=False)
             self.lr = tf.train.exponential_decay(self.lr_, self.iteration,steps_, decay, staircase=True)
             tf.summary.scalar('learning_rate', self.lr)
-            self.optimizer = tf.train.MomentumOptimizer(learning_rate=self.lr, momentum=self.h_params.momentum).apply_gradients(
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=self.lr).apply_gradients(
                 zip(self.gradients, tf.trainable_variables()),
                 name="train_step",
                 global_step=self.iteration)

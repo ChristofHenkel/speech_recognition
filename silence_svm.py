@@ -51,7 +51,7 @@ def get_corpus_subset(fnames, n):
 
 def get_balanced_corpus(silence_fnames, speech_fnames, num_of_data=-1,
                        percentage_of_speech=0.5,
-                       test_size=0.33, random_state=42, is_split=False):
+                       test_size=0.20, random_state=42, is_split=False):
     SD = SilenceDetector()
     if num_of_data > 0:
         max_num_of_data = np.min([len(silence_fnames), len(speech_fnames)])

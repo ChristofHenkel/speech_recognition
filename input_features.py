@@ -1,5 +1,4 @@
 from python_speech_features import mfcc, delta, logfbank
-import tensorflow as tf
 from scipy import signal
 import numpy as np
 
@@ -55,12 +54,20 @@ def stacked_mfcc(signal, num_layers = 3, numcep = 13):
 
 # 5)
 
-def log_filter_bank(signals, fs=16000, winlen=0.25, winstep=0.1, nfilt=26,
+def stacked_filterbank(signal, num_layers = 1, fs=16000, winlen=0.025, winstep=0.01, nfilt=26,
                     nfft=512, preemph=0.97):
-    log_fb = logfbank(signals, samplerate=fs, winlen=winlen, winstep=winstep,
+    signal = logfbank(signal, samplerate=fs, winlen=winlen, winstep=winstep,
                       nfilt=nfilt, nfft=nfft, lowfreq=0, highfreq=None,
                       preemph=preemph)
-    return log_fb
+    signal -= (np.mean(signal, axis=0) + 1e-8)
+    signal_stack = np.expand_dims(signal, axis=2)
+
+    for k in range(num_layers-1):
+        delta_ = delta(signal_stack[:,:,k],N=1)
+        delta_ = np.expand_dims(delta_, axis=2)
+        signal_stack = np.concatenate((signal_stack, delta_), axis=2)
+
+    return signal_stack
 
 
 # 6)
