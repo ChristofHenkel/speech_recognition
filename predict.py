@@ -1,6 +1,6 @@
 import tensorflow as tf
 from batch_gen import SoundCorpus
-from architectures import cnn_one_fpool3 as Baseline
+from architectures import cnn_one_fpool3_rnn as Baseline
 import os
 import logging
 from silence_detection import SilenceDetector
@@ -10,21 +10,21 @@ import numpy as np
 logging.basicConfig(level=logging.INFO)
 
 class Config:
-    soundcorpus_dir = 'assets/corpora/corpus13/'
+    soundcorpus_dir = 'assets/corpora/corpus14/'
     batch_size = 1
     is_training = False
     use_batch_norm = False
     keep_prob = 1
-    test_mode = 'valid'
+    test_mode = 'test'
     num_classes = 11
-    dims_mfcc = (99,13,1)
+    dims_mfcc = (99,13,3)
 
 
 def load_corpus(cfg):
     if cfg.test_mode == 'own_test':
         test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='own_test', fn='own_test_fname.p.soundcorpus.p')
     elif cfg.test_mode == 'test':
-        test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='test', fn='test.p.soundcorpus.p')
+        test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='test', fn='test.pf.soundcorpus.p')
     elif cfg.test_mode == 'valid':
         test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode = 'valid', fn = 'valid.p.soundcorpus.p')
     else:
@@ -152,8 +152,8 @@ def acc(submission):
     print('acc: %s' %acc)
     print('acc w/o silence: %s' % acc_no_silence)
 if __name__ == '__main__':
-    submission = prepare_submission(fn_model='models/tesla_k80_1/model_mfcc_bsize512_e49.ckpt')
-    acc(submission)
+    submission = prepare_submission(fn_model='models/tmp_model9/model_mfcc_bsize512_e49.ckpt', fn_out='tmp_model9.csv')
+    #acc(submission)
     #fn_model = 'models/model47/model_mfcc_bsize512_e49.ckpt'
     # best: 'models/model56/model_mfcc_bsize512_e47.ckpt'
     #'models/model60/model_mfcc_bsize512_e49.ckpt'

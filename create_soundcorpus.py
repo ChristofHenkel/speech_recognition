@@ -15,9 +15,9 @@ class SC_Config:
         self.dtype = 'float'
         self.padding = True
         self.mfcc = False
-        self.amount_silence = 4000 #number of training data with label silence
+
         self.pure_silence_portion = 0 # How  much silence should be pure silence the rest is sampled from backgroundnoise.
-        self.background_silence_portion = 0 # How  much of the resulting data should be silence from background.
+        self.background_silence_portion = 0 # to bo deleted
         self.unknown_portion = 0 # How much should be audio outside the wanted classes.
         self.possible_labels = 'yes no up down left right on off stop go unknown silence'.split()
         self.id2name = {i: name for i, name in enumerate(self.possible_labels)}
@@ -31,7 +31,10 @@ class SC_Config:
         self.seed = np.random.seed(1)
         self.paths_test = glob(os.path.join('assets', 'test/audio/*wav'))
         self.dir_noise = 'assets/data_augmentation/silence/background/'
-        self.dir_noise2 = 'assets/data_augmentation/silence/artificial_silence3/'
+        self.dir_art_silence = 'assets/data_augmentation/silence/artificial_silence/'
+        self.dir_art_silence2 = 'assets/data_augmentation/silence/artificial_silence3/'
+        self.amount_noise = 4000  # number of training data with label silence
+        self.portion_silence = [0.3,0.3,0.4]
         self.L = 16000 # length of files
 
         self.noise2noise = False # first fix dtype issue of random noise
@@ -147,12 +150,25 @@ class SoundCorpusCreator:
 
         elif self.config.mode == 'background':
             data = []
+            amount_noise = self.config.amount_noise
+            amount_art_silence = int((amount_noise / self.config.portion_silence[0]) * self.config.portion_silence[1])
+            amount_art_silence2 = int((amount_noise / self.config.portion_silence[0]) * self.config.portion_silence[2])
+
             noise_fns = [self.config.dir_noise + fn for fn in os.listdir(self.config.dir_noise) if fn.endswith('.wav')]
-            for fn in noise_fns:
-                data.append((99, '', fn))
-            noise_fns2 = [self.config.dir_noise2 + fn for fn in os.listdir(self.config.dir_noise2) if fn.endswith('.wav')]
-            for fn in noise_fns2[:len(noise_fns)]:
-                data.append((99, '', fn))
+            for fn in noise_fns[:amount_noise]:
+                data.append((11, '', fn))
+
+            art_silence_fns = [self.config.dir_art_silence + fn for fn in os.listdir(self.config.dir_art_silence) if
+                                fn.endswith('.wav')]
+            np.random.shuffle(art_silence_fns)
+            for fn in art_silence_fns[:amount_art_silence]:
+                data.append((11, '', fn))
+
+
+            art_silence2_fns = [self.config.dir_art_silence2 + fn for fn in os.listdir(self.config.dir_art_silence2) if fn.endswith('.wav')]
+            np.random.shuffle(art_silence2_fns)
+            for fn in art_silence2_fns[:amount_art_silence2]:
+                data.append((11, '', fn))
             np.random.shuffle(data)
             for (label_id, uid, fn) in data:
                 try:
@@ -379,9 +395,9 @@ if __name__ == '__main__':
     unknown_corpus = SoundCorpusCreator(cfg_unknown)
     len_unknown = unknown_corpus.build_corpus()
 
-    cfg_silence = SC_Config(mode='silence')
-    silence_corpus = SoundCorpusCreator(cfg_silence)
-    len_silence = silence_corpus.build_corpus()
+    #cfg_silence = SC_Config(mode='silence')
+    #silence_corpus = SoundCorpusCreator(cfg_silence)
+    #len_silence = silence_corpus.build_corpus()
 
     cfg_own_test = SC_Config(mode='test')
     own_test_corpus = SoundCorpusCreator(cfg_own_test)
@@ -395,7 +411,7 @@ if __name__ == '__main__':
                  'len_test': len_test,
                  'len_unknown':len_unknown,
                  'len_background':len_bg,
-                 'len_silence':len_silence
+                 #'len_silence':len_silence
 
                  }
 

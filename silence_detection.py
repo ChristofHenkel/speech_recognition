@@ -327,7 +327,7 @@ class SilenceDetector:
         return speech_port < self.speech_portion_threshold
 
     def is_silence2(self,wav):
-        wav = np.asarray(wav, dtype=np.int16)
+        wav = np.asarray(wav * 2**15, dtype=np.int16)
         window_duration = 0.01
         samples_per_window = int(window_duration * 16000 + 0.5)
         speech_analysis = []

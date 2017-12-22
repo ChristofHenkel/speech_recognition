@@ -3,14 +3,21 @@ import glob
 import os
 from input_features import stacked_mfcc
 import time
-from architectures import BaselineSilence2 as Baseline
+from architectures import cnn_one_fpool3 as Baseline
 import tensorflow as tf
 from silence_detection import SilenceDetector
 
 silence_pathnames = 'assets/data_augmentation/silence/background/*.wav'
+silence2_pathnames = 'assets/data_augmentation/silence/artificial_silence3/*.wav'
+
 all_train_pathnames = 'assets/train/audio/*/*wav'
 bn_dir = "assets/train/audio/_background_noise_/"
 silence_fnames = glob.glob(silence_pathnames)
+root = 'assets/data_augmentation/silence/artificial_silence3/'
+silence2_fnames = [fn for fn in os.listdir(root) if fn.endswith('.wav')]
+
+
+
 speech_fnames = [x for x in glob.glob(all_train_pathnames) if
                  os.path.dirname(x) is not bn_dir]
 
