@@ -8,7 +8,7 @@ class SoundCorpus:
 
     def __init__(self, soundcorpus_dir, mode, fn = None):
         self.mode = mode
-        assert self.mode in ['train','own_test','test','unknown','background','silence','valid']
+        assert self.mode in ['train','own_test','test','unknown','background','valid']
         if fn is None:
             self.fp = soundcorpus_dir + [fn for fn in os.listdir(soundcorpus_dir) if fn.startswith(self.mode)][0]
         else:
@@ -91,12 +91,11 @@ class SoundCorpus:
 
 class BatchGenerator:
 
-    def __init__(self, BatchParams, TrainCorpus=None, BackgroundCorpus=None, UnknownCorpus=None, SilenceCorpus=None):
+    def __init__(self, BatchParams, TrainCorpus=None, BackgroundCorpus=None, UnknownCorpus=None):
         self.batch_size = BatchParams.batch_size
         self.train_corpus = TrainCorpus
         self.background_corpus = BackgroundCorpus
         self.unknown_corpus = UnknownCorpus
-        self.silence_corpus = SilenceCorpus
         self.portion_unknown = BatchParams.portion_unknown
         self.portion_silence = BatchParams.portion_silence
         self.portion_noised = BatchParams.portion_noised
@@ -139,7 +138,6 @@ class BatchGenerator:
         gen_noise = self.gen_corpus(self.background_corpus.fp)
         gen_unknown = self.gen_corpus(self.unknown_corpus.fp)
         gen_silence = self.gen_corpus(self.background_corpus.fp)
-        #gen_silence = None
 
         while True:
             type = np.random.choice(['known', 'unknown', 'silence'],

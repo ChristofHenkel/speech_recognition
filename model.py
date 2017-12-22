@@ -16,13 +16,13 @@ import logging
 import os
 import csv
 
-from architectures import cnn_one_fpool3_rnn as Baseline
+from architectures import cnn_one_fpool4_rnn as Baseline
 logging.basicConfig(level=logging.DEBUG)
 
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus14/'
-    model_name = 'tmp_model70'
+    model_name = 'tmp_model71'
     logs_path = 'models/' + model_name + '/'
     max_ckpt_to_keep = 10
     preprocessed = False
@@ -49,14 +49,14 @@ class DisplayParams:
 
 
 class BatchParams:
-    batch_size = 512
+    batch_size = 64
     input_transformation = 'filterbank'  # mfcc, filterbank, None
     dims_input_transformation = (99, 26, 1) #nframes, nfilt, num_layers
     portion_unknown = 0.09
     portion_silence = 0.09
     portion_noised = 1
-    lower_bound_noise_mix = 0
-    upper_bound_noise_mix = 0.5
+    lower_bound_noise_mix = 0.2
+    upper_bound_noise_mix = 0.8
     noise_unknown = True
     noise_silence = True
 
@@ -83,14 +83,12 @@ class Model:
         self.len_valid = self.valid_corpus._get_len()
         self.noise_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='background', fn='background.pf.soundcorpus.p')
         self.unknown_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='unknown', fn='unknown.pf.soundcorpus.p')
-        #self.silence_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='silence', fn='silence.p.soundcorpus.p')
 
 
         self.advanced_gen = BatchGenerator(self.batch_params,
                                            self.train_corpus,
                                            self.noise_corpus,
-                                           self.unknown_corpus,
-                                           SilenceCorpus=None)
+                                           self.unknown_corpus)
 
         if self.cfg.preprocessed:
             self.advanced_gen = self.corpus_gen('test.p')
