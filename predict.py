@@ -148,8 +148,6 @@ def prepare_submission(fn_model,fn_out=None):
                     batch_x2 = transform_input(batch_x,cfg)
 
                 if k_batch % 50 == 0:
-                    print(batch_x2.shape)
-                    print(batch_y.shape)
                     toc = time.time()
                     time_per_date = (toc - tic) / (50 * cfg.batch_size)
                     logging.info('Batch %s / %s (%ss/date)' %(k_batch+1,num_batches,time_per_date))
