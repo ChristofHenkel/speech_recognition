@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus14/'
-    batch_size = 1
+    batch_size = 5
     is_training = False
     use_batch_norm = False
     keep_prob = 1
@@ -22,16 +22,21 @@ class Config:
     do_detect_silence = False
     num_classes = 12
     preprocessed = True
+    preprocessed_corpus = 'test_preprocessed.p'
+    fn_model = 'models/tmp_model14/model_mfcc_bsize512_e49.ckpt'
 
 
 def load_corpus(cfg):
     if cfg.test_mode == 'own_test':
         if cfg.preprocessed is True:
-            test_corpus = SoundCorpus('', mode='own_test', fn='own_test_preprocessed.p')
+            test_corpus = SoundCorpus('', mode='own_test', fn=cfg.preprocessed_corpus)
         else:
             test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='own_test', fn='own_test_fname.p.soundcorpus.p')
     elif cfg.test_mode == 'test':
-        test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='test', fn='test.pf.soundcorpus.p')
+        if cfg.preprocessed is True:
+            test_corpus = SoundCorpus('', mode='test', fn=cfg.preprocessed_corpus)
+        else:
+            test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='test', fn='test.pf.soundcorpus.p')
     elif cfg.test_mode == 'valid':
         test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode = 'valid', fn = 'valid.p.soundcorpus.p')
     else:
@@ -181,7 +186,10 @@ def prepare_submission(fn_model,fn_out=None):
         if len(rest_batch) > 0:
             rest_batch_x = [b['wav'] for b in rest_batch]
             rest_batch_y = [b['label'] for b in rest_batch]
-            rest_batch_x2 = transform_input(rest_batch_x, cfg)
+            if cfg.preprocessed:
+                rest_batch_x2 = rest_batch_x
+            else:
+                rest_batch_x2 = transform_input(rest_batch_x, cfg)
             prediction_rest = sess.run(pred, feed_dict={x: rest_batch_x2, keep_prob: 1.0})
             for k, p in enumerate(prediction_rest):
                 fname, label = rest_batch_y[k], decoder[p]
@@ -218,8 +226,8 @@ def acc(submission):
     print('acc: %s' %acc)
     print('acc w/o silence: %s' % acc_no_silence)
 if __name__ == '__main__':
-    #preprocess(test_corpus, cfg, 'own_test_preprocessed.p')
-    submission = prepare_submission(fn_model='models/tmp_model14/model_mfcc_bsize512_e49.ckpt')
+    #preprocess(test_corpus, cfg, cfg.preprocessed_corpus)
+    submission = prepare_submission(fn_model=cfg.fn_model)
     #acc(submission)
 
 
