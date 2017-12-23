@@ -16,7 +16,7 @@ import logging
 import os
 import csv
 
-from architectures import cnn_one_fpool4_rnn as Baseline
+from architectures import cnn_rnn_v3 as Baseline
 logging.basicConfig(level=logging.DEBUG)
 
 

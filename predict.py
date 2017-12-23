@@ -22,7 +22,7 @@ class Config:
     do_detect_silence = False
     num_classes = 12
     preprocessed = True
-    preprocessed_corpus = 'test_preprocessed.p'
+    preprocessed_corpus = test_mode + '_preprocessed.p'
     fn_model = 'models/tmp_model14/model_mfcc_bsize512_e49.ckpt'
 
 
@@ -78,8 +78,8 @@ def get_num_batches_rest_batch(test_corpus, batch_size):
     num_batches = (corpus_len - rest) / batch_size
     print('calculated number of batches: %s' %num_batches)
     num_batches = int(num_batches)
+    test_corpus.reset_gen()
     if rest > 0:
-        test_corpus.reset_gen()
         rest_batch = test_corpus._get_last_n(corpus_len,rest)
     else:
         rest_batch = []
@@ -228,6 +228,6 @@ def acc(submission):
 if __name__ == '__main__':
     #preprocess(test_corpus, cfg, cfg.preprocessed_corpus)
     submission = prepare_submission(fn_model=cfg.fn_model)
-    #acc(submission)
+    acc(submission)
 
 
