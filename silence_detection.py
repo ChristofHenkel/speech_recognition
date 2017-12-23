@@ -14,6 +14,8 @@ from scipy.signal import butter, lfilter, freqz, fftconvolve, welch
 from statsmodels.tsa.stattools import acf
 from sklearn.preprocessing import normalize
 from input_features import stacked_mfcc
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
 
 logging.basicConfig(level=logging.INFO)
 
@@ -61,6 +63,61 @@ class SilenceDetector:
 
         signal = wav[beg: beg + self.L]
         return signal
+
+    @staticmethod
+    def get_corpus_subset(fnames, n):
+        indicies = np.random.random_integers(0, len(fnames) - 1, n)
+        fnames = np.asarray(fnames)
+        fnames = fnames[indicies]
+        return fnames
+
+    def get_balanced_corpus(self,silence_fnames, speech_fnames, num_of_data=-1,
+                            percentage_of_speech=0.5,
+                            test_size=0.20, random_state=42, is_split=False):
+        if num_of_data > 0:
+            max_num_of_data = np.min([len(silence_fnames), len(speech_fnames)])
+            if num_of_data > max_num_of_data:
+                num_of_data = max_num_of_data
+            print("(Max) num of data: " + str(num_of_data))
+            n_speech = int(percentage_of_speech * num_of_data)
+            n_silence = int((1 - percentage_of_speech) * num_of_data)
+            speech_fnames = self.get_corpus_subset(speech_fnames, n_speech)
+            silence_fnames = self.get_corpus_subset(silence_fnames, n_silence)
+
+        Y_silence = np.empty(len(silence_fnames))
+        Y_silence.fill(0)
+        Y_speech = np.empty(len(speech_fnames))
+        Y_speech.fill(1)
+
+        Y = np.concatenate([Y_silence, Y_speech], axis=0)
+
+        if isinstance(speech_fnames, np.ndarray):
+            fnames = silence_fnames.tolist() + speech_fnames.tolist()
+        else:
+            fnames = silence_fnames + speech_fnames
+        data = [(fnames[i], Y[i]) for i in range(len(fnames))]
+        np.random.shuffle(data)
+        fnames = [x[0] for x in data]
+        y = [x[1] for x in data]
+        X = []
+        n = len(fnames)
+        for i, fname in enumerate(fnames):
+            logging.log(logging.DEBUG, str(i) + "/" + str(n))
+            signal = self.sd_preprocess(fname, is_plot=False)
+            # a_corr = sd.autocorrelation(signal)
+            # envelope = sd.get_amplitude_envelop(signal)
+            mfcc = self._read_wav_and_pad(fname)
+            X.append(mfcc)
+
+        if is_split:
+            ss = StandardScaler()
+            x_scale = ss.fit_transform(X)
+            X_train, X_test, y_train, y_test = train_test_split(x_scale, y,
+                                                                test_size=test_size,
+                                                                random_state=random_state)
+            return X_train, X_test, y_train, y_test, ss
+        else:
+            return X, y
 
     @staticmethod
     def get_amplitude_envelop(signal, fs=16000, duration=1.0, is_plot=False):
