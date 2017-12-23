@@ -1,12 +1,13 @@
 import tensorflow as tf
 from batch_gen import SoundCorpus
-from architectures import cnn_one_fpool3_rnn as Baseline
+from architectures import cnn_one_fpool4_rnn as Baseline
 import os
 import logging
 from silence_detection import SilenceDetector
-from input_features import stacked_mfcc
+from input_features import stacked_mfcc, stacked_filterbank
 import pickle
 import numpy as np
+import time
 logging.basicConfig(level=logging.INFO)
 
 class Config:
@@ -15,14 +16,20 @@ class Config:
     is_training = False
     use_batch_norm = False
     keep_prob = 1
-    test_mode = 'test'
-    num_classes = 11
-    dims_mfcc = (99,13,3)
+    test_mode = 'own_test'
+    input_transformation = 'filterbank'
+    dims_mfcc = (99,26,1)
+    do_detect_silence = False
+    num_classes = 12
+    preprocessed = True
 
 
 def load_corpus(cfg):
     if cfg.test_mode == 'own_test':
-        test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='own_test', fn='own_test_fname.p.soundcorpus.p')
+        if cfg.preprocessed is True:
+            test_corpus = SoundCorpus('', mode='own_test', fn='own_test_preprocessed.p')
+        else:
+            test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='own_test', fn='own_test_fname.p.soundcorpus.p')
     elif cfg.test_mode == 'test':
         test_corpus = SoundCorpus(cfg.soundcorpus_dir, mode='test', fn='test.pf.soundcorpus.p')
     elif cfg.test_mode == 'valid':
@@ -31,9 +38,34 @@ def load_corpus(cfg):
         test_corpus = None
     return test_corpus
 
+def preprocess(test_corpus,cfg, fn_out):
+    batch_gen = test_corpus.batch_gen(cfg.batch_size, input_transformation=None)
+    num_batches, rest_batch = get_num_batches_rest_batch(test_corpus, cfg.batch_size)
+    tic = time.time()
+    with open(fn_out, 'wb') as f:
+        pickler = pickle.Pickler(f)
+        for k_batch in range(num_batches):
+
+            batch_x, batch_y = next(batch_gen)
+            batch_x2 = transform_input(batch_x, cfg)
+
+            for k,b in enumerate(batch_x2):
+                pickler.dump({'wav':b, 'label':batch_y[k]})
+            if k_batch % 50 == 0:
+                toc = time.time()
+                time_per_date = (toc - tic) / (50 * cfg.batch_size)
+                logging.info('Batch %s / %s (%ss/date)' % (k_batch + 1, num_batches, time_per_date))
+
+                tic = time.time()
+
+
 
 def get_num_batches_rest_batch(test_corpus, batch_size):
-    corpus_len = test_corpus._get_len()
+    if cfg.test_mode == 'test':
+        corpus_len = 158538
+    else:
+        corpus_len = test_corpus._get_len()
+        test_corpus.reset_gen()
     if batch_size > 1:
         rest = corpus_len % batch_size
     else:
@@ -42,7 +74,8 @@ def get_num_batches_rest_batch(test_corpus, batch_size):
     print('calculated number of batches: %s' %num_batches)
     num_batches = int(num_batches)
     if rest > 0:
-        rest_batch = [b for b in test_corpus][-rest:]
+        test_corpus.reset_gen()
+        rest_batch = test_corpus._get_last_n(corpus_len,rest)
     else:
         rest_batch = []
     return num_batches, rest_batch
@@ -61,7 +94,7 @@ num_batches, rest_batch = get_num_batches_rest_batch(test_corpus,cfg.batch_size)
 decoder, encoder = load_encoder_decoder(cfg)
 
 SC = SilenceDetector()
-batch_gen = test_corpus.batch_gen(cfg.batch_size)
+batch_gen = test_corpus.batch_gen(cfg.batch_size, input_transformation=None)
 
 
 baseline = Baseline(cfg)
@@ -81,6 +114,16 @@ with graph.as_default():
         pred = tf.argmax(logits, 1)
     saver = tf.train.Saver()
 
+def transform_input(batch_x,cfg):
+    if cfg.input_transformation == 'mfcc':
+        batch_x2 = np.asarray([stacked_mfcc(b, numcep=cfg.dims_mfcc[1], num_layers=cfg.dims_mfcc[2]) for b in batch_x])
+    elif cfg.input_transformation == 'filterbank':
+        batch_x2 = np.asarray(
+            [stacked_filterbank(b, nfilt=cfg.dims_mfcc[1], num_layers=cfg.dims_mfcc[2]) for b in batch_x])
+    else:
+        batch_x2 = batch_x
+    return batch_x2
+
 def prepare_submission(fn_model,fn_out=None):
     #batch_x = [b['wav'] for b in batch]
     #batch_y = [b['label'] for b in batch]
@@ -93,25 +136,40 @@ def prepare_submission(fn_model,fn_out=None):
         saver.restore(sess, fn_model)
         print("Model restored.")
 
-
+        tic = time.time()
         for k_batch in range(num_batches):
+
             try:
                 batch_x, batch_y = next(batch_gen)
+                if cfg.preprocessed is True:
+                    batch_x2 = batch_x
 
+                else:
+                    batch_x2 = transform_input(batch_x,cfg)
 
-                batch_x2 = np.asarray([stacked_mfcc(b, numcep=cfg.dims_mfcc[1], num_layers=cfg.dims_mfcc[2]) for b in batch_x])
+                if k_batch % 50 == 0:
+                    print(batch_x2.shape)
+                    print(batch_y.shape)
+                    toc = time.time()
+                    time_per_date = (toc - tic) / (50 * cfg.batch_size)
+                    logging.info('Batch %s / %s (%ss/date)' %(k_batch+1,num_batches,time_per_date))
 
-                if k_batch % 10 == 0:
-                    logging.info('Batch %s / %s' %(k_batch+1,num_batches))
+                    tic = time.time()
+                    #time per date
                 prediction = sess.run(pred, feed_dict={x: batch_x2, keep_prob: 1.0})
                 for k,p in enumerate(prediction):
-                    try:
-                        is_silence = SC.is_silence2(batch_x[k])
-                    except:
+                    if cfg.do_detect_silence:
                         is_silence = False
-                        logging.warning('vad error in file %s - %s' %(k_batch,k))
-                    if is_silence:
-                        fname, label = batch_y[k], 'silence'
+                        if not decoder[p] == 'silence':
+                            try:
+                                is_silence = SC.is_silence2(batch_x[k])
+                            except:
+
+                                logging.warning('vad error in file %s - %s' %(k_batch,k))
+                        if is_silence:
+                            fname, label = batch_y[k], 'silence'
+                        else:
+                            fname, label = batch_y[k], decoder[p]
                     else:
                         fname, label = batch_y[k], decoder[p]
                     if cfg.test_mode in ['test','own_test']:
@@ -119,10 +177,20 @@ def prepare_submission(fn_model,fn_out=None):
                     else:
                         submission.append((fname,label))
             except EOFError:
+                print('EOFError')
                 pass
-        for b in rest_batch:
-            fname, label = b['label'], 'unknown'
-            submission[fname] = label
+
+        if len(rest_batch) > 0:
+            rest_batch_x = [b['wav'] for b in rest_batch]
+            rest_batch_y = [b['label'] for b in rest_batch]
+            rest_batch_x2 = transform_input(rest_batch_x, cfg)
+            prediction_rest = sess.run(pred, feed_dict={x: rest_batch_x2, keep_prob: 1.0})
+            for k, p in enumerate(prediction_rest):
+                fname, label = rest_batch_y[k], decoder[p]
+                if cfg.test_mode in ['test', 'own_test']:
+                    submission[fname] = label
+                else:
+                    submission.append((fname, label))
 
 
         if fn_out is not None:
@@ -152,10 +220,8 @@ def acc(submission):
     print('acc: %s' %acc)
     print('acc w/o silence: %s' % acc_no_silence)
 if __name__ == '__main__':
-    submission = prepare_submission(fn_model='models/tmp_model9/model_mfcc_bsize512_e49.ckpt', fn_out='tmp_model9.csv')
+    #preprocess(test_corpus, cfg, 'own_test_preprocessed.p')
+    submission = prepare_submission(fn_model='models/tmp_model14/model_mfcc_bsize512_e49.ckpt')
     #acc(submission)
-    #fn_model = 'models/model47/model_mfcc_bsize512_e49.ckpt'
-    # best: 'models/model56/model_mfcc_bsize512_e47.ckpt'
-    #'models/model60/model_mfcc_bsize512_e49.ckpt'
-    #fn_model= 'models/tesla_k80_1/model_mfcc_bsize512_e48.ckpt'
+
 

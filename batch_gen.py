@@ -1,7 +1,7 @@
 import os
 import pickle
 import numpy as np
-import sounddevice as sd
+# import sounddevice as sd
 from input_features import stacked_mfcc, stacked_filterbank
 
 class SoundCorpus:
@@ -43,6 +43,9 @@ class SoundCorpus:
         for _ in self.gen:
             size +=1
         return size
+
+    def reset_gen(self):
+        self.gen = self.__iter__()
 
     def _get_last_n(self,length, n):
         pos = 0
