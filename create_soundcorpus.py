@@ -4,7 +4,6 @@ import os
 import numpy as np
 from scipy.io import wavfile
 import logging
-import random
 import pickle
 from python_speech_features import mfcc, logfbank, delta
 
@@ -28,7 +27,8 @@ class SC_Config:
         self.dir_files = 'train/audio/*/*wav'
         self.validation_list_fp = 'train/validation_list.txt'
         self.save_dir = self.data_root + 'corpora/corpus14/'
-        self.seed = np.random.seed(1)
+        #self.seed =np.random.seed(1)
+        self.seed = 24
         self.paths_test = glob(os.path.join('assets', 'test/audio/*wav'))
         self.dir_noise = 'assets/data_augmentation/silence/background/'
         self.dir_art_silence = 'assets/data_augmentation/silence/artificial_silence/'
@@ -64,6 +64,7 @@ class SoundCorpusCreator:
         elif self.config.mode == 'test':
             self.test_data = self.config.paths_test
         self.L = self.config.L
+        np.random.seed(seed=self.config.seed)
 
     @staticmethod
     def _do_mfcc(signal):

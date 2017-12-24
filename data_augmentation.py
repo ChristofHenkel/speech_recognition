@@ -34,6 +34,8 @@ save_dir = 'assets/data_augmentation/silence/background/'
 fns = [fn for fn in os.listdir(bn_dir) if not fn.startswith('.')]
 fns = [fn for fn in fns if not fn.startswith('READ')]
 
+seed = 24
+np.random.seed(seed=seed)
 
 def create_noise(fns, factor, lower_bound_silence= None, upper_bound_silence= None):
     for fn in fns:
