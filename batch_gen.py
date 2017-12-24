@@ -141,10 +141,11 @@ class BatchGenerator:
         gen_noise = self.gen_corpus(self.background_corpus.fp)
         gen_unknown = self.gen_corpus(self.unknown_corpus.fp)
         gen_silence = self.gen_corpus(self.background_corpus.fp)
-
+        seed = 24
+        np.random.seed(seed=seed)
         while True:
-            seed = 24
-            np.random.seed(seed=seed)
+
+
             type = np.random.choice(['known', 'unknown', 'silence'],
                                     p=[1 - self.portion_unknown - self.portion_silence,
                                        self.portion_unknown,
