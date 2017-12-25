@@ -16,13 +16,13 @@ import logging
 import os
 import csv
 
-from architectures import cnn_rnn_v3 as Baseline
+from architectures import cnn_rnn_v3_small as Baseline
 logging.basicConfig(level=logging.DEBUG)
 
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus14/'
-    model_name = 'tmp_model71'
+    model_name = 'tmp_model73'
     logs_path = 'models/' + model_name + '/'
     max_ckpt_to_keep = 10
     preprocessed = False
@@ -33,11 +33,11 @@ class Hparams:
     use_batch_norm = False
     keep_prob = 0.9
     max_gradient = 5
-    tf_seed = 5
-    learning_rate = 0.001
+    tf_seed = 1
+    learning_rate = 0.0005
     lr_decay_rate = 0.9
     lr_change_steps = 100
-    epochs = 5
+    epochs = 20
     epochs_per_save = 1
     #momentum = 0.2
 
@@ -49,14 +49,14 @@ class DisplayParams:
 
 
 class BatchParams:
-    batch_size = 64
+    batch_size = 128
     input_transformation = 'filterbank'  # mfcc, filterbank, None
     dims_input_transformation = (99, 26, 1) #nframes, nfilt, num_layers
-    portion_unknown = 0.09
+    portion_unknown = 0.15
     portion_silence = 0.09
     portion_noised = 1
     lower_bound_noise_mix = 0.2
-    upper_bound_noise_mix = 0.8
+    upper_bound_noise_mix = 0.7
     noise_unknown = True
     noise_silence = True
 
@@ -83,8 +83,13 @@ class Model:
         self.len_valid = self.valid_corpus._get_len()
         self.noise_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='background', fn='background.pf.soundcorpus.p')
         self.unknown_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode='unknown', fn='unknown.pf.soundcorpus.p')
-
-
+        self.test_corpus = SoundCorpus(self.cfg.soundcorpus_dir, mode = 'own_test', fn='own_test_fname.p.soundcorpus.p')
+        self.fname2label = self._load_fname2label()
+        len_test = self.test_corpus._get_len()
+        test_gen = self.test_corpus.batch_gen(len_test,input_transformation='filterbank',
+                                              dims_input_transformation=self.batch_params.dims_input_transformation)
+        self.test_batch_x, test_batch_y = next(test_gen)
+        self.test_batch_y = [self.fname2label[b] for b in test_batch_y]
         self.advanced_gen = BatchGenerator(self.batch_params,
                                            self.train_corpus,
                                            self.noise_corpus,
@@ -106,6 +111,11 @@ class Model:
             infos = pickle.load(f)
         return infos
 
+    def _load_fname2label(self):
+        with open(self.cfg.soundcorpus_dir + 'fname2label.p', 'rb') as f:
+            fname2label = pickle.load(f)
+        return fname2label
+
     def save(self, sess, epoch):
         print('saving model...', end='')
         model_name = 'model_%s_bsize%s_e%s.ckpt' % ('mfcc', self.batch_params.batch_size, epoch)
@@ -119,6 +129,7 @@ class Model:
 
     def get_config(self):
         config_list = []
+
         for line in self.class2list(Config):
             config_list.append(line)
         for line in self.class2list(Hparams):
@@ -183,6 +194,8 @@ class Model:
 
     def write_config(self):
         with open(os.path.join(self.cfg.logs_path, 'config.txt'), 'w') as f:
+            f.write('Baseline = {}\n'.format(Baseline.__name__))
+            f.write('\n')
             f.write('Config\n')
             for line in self.class2list(Config):
                 f.write('{} = {}\n'.format(line[0], line[1]))
@@ -279,6 +292,13 @@ class Model:
                                                                   self.keep_prob: 1})
                 valid_writer.add_summary(summary_val, global_step)
                 print("validation:", c_val, acc_val)
+                c_test, acc_test, cm_test= sess.run([self.cost, self.accuracy, self.confusion_matrix],
+                                                       feed_dict={self.x: self.test_batch_x, self.y: self.test_batch_y,
+                                                                  self.keep_prob: 1})
+                print("test:", c_test, acc_test)
+                for k in range(12):
+                    print(str(self.decoder[k]) + ' ' + str(cm_test[k,k]/sum(cm_test[:,k])))
+
 
             print("Optimization Finished!")
             self.result = [['train_acc',acc],['val_acc',acc_val]]

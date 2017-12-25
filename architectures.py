@@ -552,8 +552,8 @@ class cnn_rnn_v3_small:
         #x2 = layers.max_pool2d(x2, kernel_size=(2, 1), stride=1)
         #x2 = layers.conv2d(x2, num_outputs=16, kernel_size=(1, 20), stride=1, activation_fn=tf.nn.elu)
         #x2 = layers.max_pool2d(x2, kernel_size=(2, 1), stride=1)
-        x2 = layers.conv2d(x2, num_outputs=16, kernel_size=(1, 10), stride=1, activation_fn=tf.nn.elu)
-        x2 = layers.max_pool2d(x2, kernel_size=(2, 1), stride=1)
+        #x2 = layers.conv2d(x2, num_outputs=16, kernel_size=(1, 10), stride=1, activation_fn=tf.nn.elu)
+        #x2 = layers.max_pool2d(x2, kernel_size=(2, 1), stride=1)
         x2 = layers.conv2d(x2, num_outputs=16, kernel_size=(1, 5), stride=1, activation_fn=tf.nn.elu)
         x2 = layers.max_pool2d(x2, kernel_size=(2, 1), stride=1)
 
@@ -565,7 +565,7 @@ class cnn_rnn_v3_small:
         with tf.variable_scope('lstm1'):
             stacked_fw_rnn = []
             for fw_Lyr in range(1):
-                fw_cell = tf.contrib.rnn.BasicLSTMCell(64, forget_bias=1.0, state_is_tuple=True)  # or True
+                fw_cell = tf.contrib.rnn.BasicLSTMCell(32, forget_bias=1.0, state_is_tuple=True)  # or True
                 fw_cell = tf.nn.rnn_cell.DropoutWrapper(fw_cell, output_keep_prob=keep_prob)
                 stacked_fw_rnn.append(fw_cell)
             fw_multi_cell = tf.contrib.rnn.MultiRNNCell(cells=stacked_fw_rnn, state_is_tuple=True)
@@ -573,7 +573,7 @@ class cnn_rnn_v3_small:
         with tf.variable_scope('lstm2'):
             stacked_bw_rnn = []
             for bw_Lyr in range(1):
-                bw_cell = tf.contrib.rnn.BasicLSTMCell(64, forget_bias=1.0, state_is_tuple=True)  # or True
+                bw_cell = tf.contrib.rnn.BasicLSTMCell(32, forget_bias=1.0, state_is_tuple=True)  # or True
                 bw_cell = tf.nn.rnn_cell.DropoutWrapper(bw_cell, output_keep_prob=keep_prob)
                 stacked_bw_rnn.append(bw_cell)
             bw_multi_cell = tf.contrib.rnn.MultiRNNCell(cells=stacked_bw_rnn, state_is_tuple=True)
@@ -585,9 +585,9 @@ class cnn_rnn_v3_small:
 
         outputs = tf.nn.dropout(outputs, keep_prob=keep_prob)
         # flatten
-        outputs = tf.contrib.layers.flatten(outputs)
+        x3 = tf.contrib.layers.flatten(outputs)
 
-        x3 = layers.fully_connected(outputs, 16, activation_fn=tf.nn.relu)
+        #x3 = layers.fully_connected(outputs, 16, activation_fn=tf.nn.relu)
 
 
         logits = layers.fully_connected(x3, num_classes, activation_fn=tf.nn.relu)
