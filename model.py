@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus14/'
-    model_name = 'tmp_model73'
+    model_name = 'tmp_model74'
     logs_path = 'models/' + model_name + '/'
     max_ckpt_to_keep = 10
     preprocessed = False
@@ -59,6 +59,8 @@ class BatchParams:
     upper_bound_noise_mix = 0.7
     noise_unknown = True
     noise_silence = True
+    unknown_change_epochs = 100
+    unknown_change_rate = 2
 
 
 class Model:
@@ -168,6 +170,12 @@ class Model:
                     pickler.dump((batch_x, batch_y))
                     step += 1
 
+    def write_result_to_csv(self, row):
+        with open(self.cfg.logs_path + 'results.csv','a') as csvfile:
+            writer = csv.writer(csvfile, delimiter=';',quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            #writer.writerow([c[0] for c in config_list])
+            writer.writerow(row)
+
     class corpus_gen:
 
         def __init__(self,fn):
@@ -246,7 +254,7 @@ class Model:
             global_step = 0
 
             batch_gen = self.advanced_gen.batch_gen()
-            for epoch in range(self.h_params.epochs):
+            for epoch in range(1,self.h_params.epochs):
 
                 step = 1
 
@@ -298,7 +306,11 @@ class Model:
                 print("test:", c_test, acc_test)
                 for k in range(12):
                     print(str(self.decoder[k]) + ' ' + str(cm_test[k,k]/sum(cm_test[:,k])))
+                row = [acc_test] + [cm_test[k,k]/sum(cm_test[:,k]) for k in range(12)]
+                self.write_result_to_csv(row)
 
+                if epoch % self.batch_params.unknown_change_epochs == 0:
+                    self.advanced_gen.portion_unknown = self.advanced_gen.portion_unknown * self.batch_params.unknown_change_rate
 
             print("Optimization Finished!")
             self.result = [['train_acc',acc],['val_acc',acc_val]]
