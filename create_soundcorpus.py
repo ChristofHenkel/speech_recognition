@@ -26,7 +26,7 @@ class SC_Config:
         self.data_root = 'assets/'
         self.dir_files = 'train/audio/*/*wav'
         self.validation_list_fp = 'train/validation_list.txt'
-        self.save_dir = self.data_root + 'corpora/corpus14/'
+        self.save_dir = self.data_root + 'corpora/corpus13/'
         #self.seed =np.random.seed(1)
         self.seed = 24
         self.paths_test = glob(os.path.join('assets', 'test/audio/*wav'))
@@ -36,6 +36,8 @@ class SC_Config:
         self.amount_noise = 4000  # number of training data with label silence
         self.portion_silence = [0.3,0.3,0.4]
         self.L = 16000 # length of files
+        self.artificial_unknown_portion = 0.3
+        self.dir_art_unknown = 'assets/data_augmentation/unknown/artificial_unknown/'
 
         self.noise2noise = False # first fix dtype issue of random noise
 
@@ -186,8 +188,15 @@ class SoundCorpusCreator:
         elif self.config.mode == 'unknown':
             data = self.train_data
             data = [d for d in data if d[0] == self.config.name2id['unknown']]
-            print(len(data))
+            if self.config.artificial_unknown_portion > 0:
+                artificial_unknown_fns = [self.config.dir_art_unknown + fn for fn in os.listdir(self.config.dir_art_unknown) if fn.endswith('.wav')]
+                np.random.shuffle(artificial_unknown_fns)
+                artificial_unknown_fns = artificial_unknown_fns[:int(len(data)*(1/(1-self.config.artificial_unknown_portion)-1))]
+                artificial_unknown = [(self.config.name2id['unknown'],'',fn) for fn in artificial_unknown_fns]
+                print(len(artificial_unknown))
+                data.extend(artificial_unknown)
             np.random.shuffle(data)
+            print(len(data))
             for (label_id, uid, fname) in data:
                 try:
                     signal = self._read_wav_and_pad(fname)

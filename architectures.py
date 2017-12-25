@@ -290,6 +290,62 @@ class cnn_rnn_v3:
 
         return logits
 
+class cnn_5rnn:
+    """Builds a standard convolutional model.
+    This is roughly the network labeled as 'cnn-trad-fpool3' in the
+    'Convolutional Neural Networks for Small-footprint Keyword Spotting' paper:
+    http://www.isca-speech.org/archive/interspeech_2015/papers/i15_1478.pdf
+    """
+
+    def __init__(self, cfg):
+        pass
+
+    def calc_logits(self, x, keep_prob, num_classes):
+        x2 = x
+        x2 = layers.conv2d(x2, num_outputs=54, kernel_size=(4, 70), stride=1, activation_fn=tf.nn.elu)
+        x2 = layers.max_pool2d(x2, kernel_size=(3, 1), stride=1)
+        x2 = layers.conv2d(x2, num_outputs=54, kernel_size=(2, 35), stride=1, activation_fn=tf.nn.elu)
+        x2 = layers.max_pool2d(x2, kernel_size=(2, 1), stride=1)
+        x2 = layers.conv2d(x2, num_outputs=54, kernel_size=(1, 20), stride=1, activation_fn=tf.nn.elu)
+        x2 = layers.max_pool2d(x2, kernel_size=(2, 1), stride=1)
+
+        x2 = tf.unstack(x2,axis=3)
+        x2 = tf.concat(x2,axis = 2)
+
+
+        # Define a lstm cell
+        with tf.variable_scope('lstm1'):
+            stacked_fw_rnn = []
+            for fw_Lyr in range(5):
+                fw_cell = tf.contrib.rnn.BasicLSTMCell(256, forget_bias=1.0, state_is_tuple=True)  # or True
+                fw_cell = tf.nn.rnn_cell.DropoutWrapper(fw_cell, output_keep_prob=keep_prob)
+                stacked_fw_rnn.append(fw_cell)
+            fw_multi_cell = tf.contrib.rnn.MultiRNNCell(cells=stacked_fw_rnn, state_is_tuple=True)
+
+        with tf.variable_scope('lstm2'):
+            stacked_bw_rnn = []
+            for bw_Lyr in range(5):
+                bw_cell = tf.contrib.rnn.BasicLSTMCell(256, forget_bias=1.0, state_is_tuple=True)  # or True
+                bw_cell = tf.nn.rnn_cell.DropoutWrapper(bw_cell, output_keep_prob=keep_prob)
+                stacked_bw_rnn.append(bw_cell)
+            bw_multi_cell = tf.contrib.rnn.MultiRNNCell(cells=stacked_bw_rnn, state_is_tuple=True)
+
+        outputs, _ = tf.nn.bidirectional_dynamic_rnn(fw_multi_cell,bw_multi_cell,x2,dtype=tf.float32)
+        output_fw, output_bw = outputs
+
+        outputs = tf.add(output_fw,output_bw)
+
+        outputs = tf.nn.dropout(outputs, keep_prob=keep_prob)
+        # flatten
+        outputs = tf.contrib.layers.flatten(outputs)
+
+        x3 = layers.fully_connected(outputs, 32, activation_fn=tf.nn.relu)
+
+
+        logits = layers.fully_connected(x3, num_classes, activation_fn=tf.nn.relu)
+
+        return logits
+
 class cnn_rnn_v3_attention:
     """Builds a standard convolutional model.
     This is roughly the network labeled as 'cnn-trad-fpool3' in the
@@ -612,7 +668,7 @@ class cnn_rnn_v3_small:
         #x2 = layers.max_pool2d(x2, kernel_size=(2, 1), stride=1)
         #x2 = layers.conv2d(x2, num_outputs=16, kernel_size=(1, 10), stride=1, activation_fn=tf.nn.elu)
         #x2 = layers.max_pool2d(x2, kernel_size=(2, 1), stride=1)
-        x2 = layers.conv2d(x2, num_outputs=16, kernel_size=(1, 5), stride=1, activation_fn=tf.nn.elu)
+        x2 = layers.conv2d(x2, num_outputs=64, kernel_size=(1, 5), stride=1, activation_fn=tf.nn.elu)
         x2 = layers.max_pool2d(x2, kernel_size=(2, 1), stride=1)
 
         x2 = tf.unstack(x2,axis=3)

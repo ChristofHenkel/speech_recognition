@@ -120,7 +120,7 @@ def create_silence():
 
 def create_silence2():
     train_corpus = SoundCorpus('assets/corpora/corpus14/', mode='train')
-    save_dir = 'assets/data_augmentation/silence/artificial_silence3/'
+    save_dir = 'assets/data_augmentation/silence/artificial_silence/'
     data = [d for d in train_corpus]
     new_silence = np.asarray([],dtype=np.int16)
     for k,d in enumerate(data):
@@ -138,7 +138,29 @@ def create_silence2():
 
     return new_silence
 
+def create_unknown():
+    train_corpus = SoundCorpus('assets/corpora/corpus14/', mode='unknown')
+    save_dir = 'assets/data_augmentation/unknown/artificial_unknown/'
+    data = [np.int16(d['wav'] * 2**15) for d in train_corpus]
+    parts = 10
+    ids = [id for id in range(parts)]
+    n = 0
+    for k in range(int(len(data)/parts)):
+        print(k)
+        data0 = data[parts*k:parts*(k+1)]
 
+
+        len_part = int(16000/parts)
+
+        for w in range(parts):
+            np.random.shuffle(ids)
+            new_wav = np.asarray([],dtype=np.int16)
+            for p in range(parts):
+                new_part = data0[ids[p]][len_part*p:len_part*(p+1)]
+                new_wav = np.concatenate((new_wav, new_part), axis=0)
+            new_wav_name = 'art_unknown' + str(n) + '.wav'
+            wavfile.write(save_dir + new_wav_name, 16000,new_wav)
+            n+=1
 
 if __name__ == '__main__':
     create_noise(fns,10)
