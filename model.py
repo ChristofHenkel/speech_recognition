@@ -15,6 +15,7 @@ import time
 import logging
 import os
 import csv
+import numpy as np
 
 from architectures import cnn_rnn_v3_small as Baseline
 logging.basicConfig(level=logging.DEBUG)
@@ -22,7 +23,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus14/'
-    model_name = 'tmp_model74'
+    model_name = 'tmp_model75'
     logs_path = 'models/' + model_name + '/'
     max_ckpt_to_keep = 10
     preprocessed = False
@@ -34,7 +35,7 @@ class Hparams:
     keep_prob = 0.9
     max_gradient = 5
     tf_seed = 1
-    learning_rate = 0.0005
+    learning_rate = 0.0001
     lr_decay_rate = 0.9
     lr_change_steps = 100
     epochs = 20
@@ -269,7 +270,10 @@ class Model:
 
                     # Run optimization op (backprop)
                     summary_, _ = sess.run([self.summaries, self.optimizer],
-                                           feed_dict={self.x: batch_x, self.y: batch_y, self.keep_prob: self.h_params.keep_prob})
+                                           feed_dict={self.x: batch_x,
+                                                      self.y: batch_y,
+                                                      self.keep_prob: self.h_params.keep_prob
+})
                     train_writer.add_summary(summary_, global_step)
                     if step % self.display_params.print_step == 0:
                         # Calculate batch accuracy
@@ -335,13 +339,14 @@ class Model:
                 self.x = tf.placeholder(tf.float32, shape=self.batch_shape, name="input")
                 self.y = tf.placeholder(tf.int64, shape=(None,), name="input")
                 self.keep_prob = tf.placeholder(tf.float32, name="dropout")
-
+                class_weights = tf.constant([1.0, 1.0, 1.0, 1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.5])
+                weights = tf.gather(class_weights, self.y)
             with tf.variable_scope('logit'):
                 self.logits = self.baseline.calc_logits(self.x, self.keep_prob, self.num_classes)
 
 
             with tf.variable_scope('costs'):
-                self.xent = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.y, logits=self.logits)
+                self.xent = tf.losses.sparse_softmax_cross_entropy(labels=self.y, logits=self.logits, weights= weights)
                 self.cost = tf.reduce_mean(self.xent, name='xent')
 
                 tf.summary.scalar('cost', self.cost)
