@@ -495,7 +495,7 @@ class cnn3_rnn3_attention:
         # Define a lstm cell
         with tf.variable_scope('lstm1'):
             stacked_fw_rnn = []
-            for fw_Lyr in range(2):
+            for fw_Lyr in range(3):
                 fw_cell = tf.contrib.rnn.BasicLSTMCell(256, forget_bias=1.0, state_is_tuple=True)  # or True
                 fw_cell = tf.contrib.rnn.AttentionCellWrapper(fw_cell,attn_length=5)
                 fw_cell = tf.nn.rnn_cell.DropoutWrapper(fw_cell, output_keep_prob=keep_prob)
@@ -504,7 +504,7 @@ class cnn3_rnn3_attention:
 
         with tf.variable_scope('lstm2'):
             stacked_bw_rnn = []
-            for bw_Lyr in range(2):
+            for bw_Lyr in range(3):
                 bw_cell = tf.contrib.rnn.BasicLSTMCell(256, forget_bias=1.0, state_is_tuple=True)  # or True
                 bw_cell = tf.contrib.rnn.AttentionCellWrapper(bw_cell, attn_length=5)
                 bw_cell = tf.nn.rnn_cell.DropoutWrapper(bw_cell, output_keep_prob=keep_prob)
