@@ -139,7 +139,7 @@ def create_silence2():
     return new_silence
 
 def create_unknown():
-    train_corpus = SoundCorpus('assets/corpora/corpus14/', mode='unknown')
+    train_corpus = SoundCorpus('assets/corpora/corpus2/', mode='unknown')
     save_dir = 'assets/data_augmentation/unknown/artificial_unknown/'
     data = [np.int16(d['wav'] * 2**15) for d in train_corpus]
     parts = 10
@@ -163,5 +163,6 @@ def create_unknown():
             n+=1
 
 if __name__ == '__main__':
-    create_noise(fns,10)
+    create_unknown()
+    #create_noise(fns,10)
     #create_silence2()

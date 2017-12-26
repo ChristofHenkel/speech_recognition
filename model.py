@@ -1,12 +1,16 @@
 """
 try regulizer:
 
-regularizer = tf.contrib.layers.l2_regularizer(scale=0.1)
+reg_constant = 0.01
 layer2 = tf.layers.conv2d(
     inputs,
     filters,
     kernel_size,
-    kernel_regularizer=regularizer)
+    kernel_regularizer=tf.contrib.layers.l2_regularizer(reg_constant))
+
+loss = cost + tf.add_n(tf.get_collection(
+tf.GraphKeys.REGULARIZATION_LOSSES))
+
 """
 from batch_gen import SoundCorpus, BatchGenerator
 import pickle
@@ -40,6 +44,8 @@ class Hparams:
     lr_change_steps = 100
     epochs = 20
     epochs_per_save = 1
+    class_weights = [1.0, 1.0, 1.0, 1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.5]
+    reg_constant = 0.1
     #momentum = 0.2
 
 
@@ -299,11 +305,13 @@ class Model:
                                                             input_transformation='filterbank',
                                                             dims_input_transformation=self.batch_params.dims_input_transformation)
                 val_batch_x, val_batch_y = next(val_batch_gen)
-                summary_val, c_val, acc_val = sess.run([self.summaries, self.cost, self.accuracy],
+                summary_val, c_val, acc_val, cm_val = sess.run([self.summaries, self.cost, self.accuracy, self.confusion_matrix],
                                                        feed_dict={self.x: val_batch_x, self.y: val_batch_y,
                                                                   self.keep_prob: 1})
                 valid_writer.add_summary(summary_val, global_step)
                 print("validation:", c_val, acc_val)
+                for k in range(11):
+                    print(str(self.decoder[k]) + ' ' + str(cm_val[k,k]/sum(cm_val[:,k])))
                 c_test, acc_test, cm_test= sess.run([self.cost, self.accuracy, self.confusion_matrix],
                                                        feed_dict={self.x: self.test_batch_x, self.y: self.test_batch_y,
                                                                   self.keep_prob: 1})
@@ -339,7 +347,7 @@ class Model:
                 self.x = tf.placeholder(tf.float32, shape=self.batch_shape, name="input")
                 self.y = tf.placeholder(tf.int64, shape=(None,), name="input")
                 self.keep_prob = tf.placeholder(tf.float32, name="dropout")
-                class_weights = tf.constant([1.0, 1.0, 1.0, 1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.5])
+                class_weights = tf.constant(self.h_params.class_weights)
                 weights = tf.gather(class_weights, self.y)
             with tf.variable_scope('logit'):
                 self.logits = self.baseline.calc_logits(self.x, self.keep_prob, self.num_classes)
@@ -350,7 +358,8 @@ class Model:
                 self.cost = tf.reduce_mean(self.xent, name='xent')
 
                 tf.summary.scalar('cost', self.cost)
-
+                self.loss = self.cost + tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
+                tf.summary.scalar('loss', self.loss)
             with tf.variable_scope('acc'):
                 self.pred = tf.argmax(self.logits, 1)
                 self.correct_prediction = tf.equal(self.pred, tf.reshape(self.y, [-1]))
@@ -363,7 +372,7 @@ class Model:
                     tf.summary.scalar(self.decoder[i], acc_id)
 
             # train ops
-            self.gradients = tf.gradients(self.cost, tf.trainable_variables())
+            self.gradients = tf.gradients(self.loss, tf.trainable_variables())
             tf.summary.scalar('grad_norm', tf.global_norm(self.gradients))
             # gradients, _ = tf.clip_by_global_norm(raw_gradients,max_gradient, name="clip_gradients")
             # gradnorm_clipped = tf.global_norm(gradients)
