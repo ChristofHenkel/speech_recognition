@@ -209,14 +209,14 @@ def prepare_submission(fn_model,fn_out=None):
 
         if fn_out is not None:
             with open(os.path.join(cfg.soundcorpus_dir, fn_out), 'w') as fout:
+                fout.write('fname,label\n')
                 for fname, label in submission.items():
-                    fout.write('fname,label\n')
                     fout.write('{},{}\n'.format(fname, label))
 
             if cfg.write_probs:
                 with open(os.path.join(cfg.soundcorpus_dir, fn_out[:-4] + '_probs.csv'), 'w') as fout:
+                    fout.write('fname,label,prob\n')
                     for fname, label in submission.items():
-                        fout.write('fname,label,prob\n')
                         fout.write('{},{},{}\n'.format(fname, label,submission_probs[fname]))
 
     return submission
