@@ -39,13 +39,13 @@ class Hparams:
     keep_prob = 0.9
     max_gradient = 5
     tf_seed = 1
-    learning_rate = 0.0001
-    lr_decay_rate = 0.9
+    learning_rate = 0.00005
+    lr_decay_rate = 0.99
     lr_change_steps = 100
-    epochs = 20
+    epochs = 40
     epochs_per_save = 1
-    class_weights = [1.0, 1.0, 1.0, 1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.5]
-    reg_constant = 0.1
+    class_weights = [1.0, 1.0, 1.0, 1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.3,1]
+    reg_constant = None
     #momentum = 0.2
 
 
@@ -59,15 +59,16 @@ class BatchParams:
     batch_size = 128
     input_transformation = 'filterbank'  # mfcc, filterbank, None
     dims_input_transformation = (99, 26, 1) #nframes, nfilt, num_layers
-    portion_unknown = 0.15
+    portion_unknown = 0.09
     portion_silence = 0.09
     portion_noised = 1
-    lower_bound_noise_mix = 0.2
-    upper_bound_noise_mix = 0.7
+    lower_bound_noise_mix = 0.4
+    upper_bound_noise_mix = 0.8
     noise_unknown = True
     noise_silence = True
     unknown_change_epochs = 100
     unknown_change_rate = 2
+    seed = 1
 
 
 class Model:
@@ -83,7 +84,7 @@ class Model:
         self.write_config()
 
         self.graph = tf.Graph()
-        self.tf_seed = tf.set_random_seed(self.h_params.tf_seed)
+        # self.tf_seed = tf.set_random_seed(self.h_params.tf_seed) deprecated
         self.batch_shape = (None,) + self.batch_params.dims_input_transformation
         self.baseline = Baseline(self.h_params)
         self.infos = self._load_infos()
@@ -252,7 +253,7 @@ class Model:
         return predictions
 
     def train(self):
-        with tf.Session(graph=self.graph) as sess:
+        with tf.Session(graph=self.graph, ) as sess:
             logging.info('Start training')
             self.init = tf.global_variables_initializer()
             train_writer = tf.summary.FileWriter(self.cfg.logs_path + 'train/', graph=self.graph)
@@ -315,12 +316,14 @@ class Model:
                 c_test, acc_test, cm_test= sess.run([self.cost, self.accuracy, self.confusion_matrix],
                                                        feed_dict={self.x: self.test_batch_x, self.y: self.test_batch_y,
                                                                   self.keep_prob: 1})
+                print(' ')
                 print("test:", c_test, acc_test)
                 for k in range(12):
                     print(str(self.decoder[k]) + ' ' + str(cm_test[k,k]/sum(cm_test[:,k])))
                 row = [acc_test] + [cm_test[k,k]/sum(cm_test[:,k]) for k in range(12)]
                 self.write_result_to_csv(row)
-
+                #print(' ')
+                #print(self.lr)
                 if epoch % self.batch_params.unknown_change_epochs == 0:
                     self.advanced_gen.portion_unknown = self.advanced_gen.portion_unknown * self.batch_params.unknown_change_rate
 
@@ -342,7 +345,7 @@ class Model:
         logging.info('Setting Graph Variables')
         with self.graph.as_default():
             # tf Graph input
-
+            tf.set_random_seed(self.h_params.tf_seed)
             with tf.name_scope("Input"):
                 self.x = tf.placeholder(tf.float32, shape=self.batch_shape, name="input")
                 self.y = tf.placeholder(tf.int64, shape=(None,), name="input")
@@ -356,10 +359,9 @@ class Model:
             with tf.variable_scope('costs'):
                 self.xent = tf.losses.sparse_softmax_cross_entropy(labels=self.y, logits=self.logits, weights= weights)
                 self.cost = tf.reduce_mean(self.xent, name='xent')
-
+                if self.h_params.reg_constant is not None:
+                    self.cost = self.cost + tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
                 tf.summary.scalar('cost', self.cost)
-                self.loss = self.cost + tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
-                tf.summary.scalar('loss', self.loss)
             with tf.variable_scope('acc'):
                 self.pred = tf.argmax(self.logits, 1)
                 self.correct_prediction = tf.equal(self.pred, tf.reshape(self.y, [-1]))
@@ -372,7 +374,7 @@ class Model:
                     tf.summary.scalar(self.decoder[i], acc_id)
 
             # train ops
-            self.gradients = tf.gradients(self.loss, tf.trainable_variables())
+            self.gradients = tf.gradients(self.cost, tf.trainable_variables())
             tf.summary.scalar('grad_norm', tf.global_norm(self.gradients))
             # gradients, _ = tf.clip_by_global_norm(raw_gradients,max_gradient, name="clip_gradients")
             # gradnorm_clipped = tf.global_norm(gradients)

@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus14/'
-    batch_size = 5
+    batch_size = 128
     is_training = False
     use_batch_norm = False
     keep_prob = 1
@@ -21,9 +21,11 @@ class Config:
     dims_mfcc = (99,26,1)
     do_detect_silence = False
     num_classes = 12
-    preprocessed = True
+    preprocessed = False
     preprocessed_corpus = test_mode + '_preprocessed.p'
     fn_model = 'models/tmp_model14/model_mfcc_bsize512_e49.ckpt'
+    fn_out = 'test.csv'
+    write_probs = True
 
 
 def load_corpus(cfg):
@@ -56,7 +58,7 @@ def preprocess(test_corpus,cfg, fn_out):
 
             for k,b in enumerate(batch_x2):
                 pickler.dump({'wav':b, 'label':batch_y[k]})
-            if k_batch % 50 == 0:
+            if k_batch % 2 == 0:
                 toc = time.time()
                 time_per_date = (toc - tic) / (50 * cfg.batch_size)
                 logging.info('Batch %s / %s (%ss/date)' % (k_batch + 1, num_batches, time_per_date))
@@ -97,7 +99,6 @@ cfg = Config()
 test_corpus = load_corpus(cfg)
 num_batches, rest_batch = get_num_batches_rest_batch(test_corpus,cfg.batch_size)
 decoder, encoder = load_encoder_decoder(cfg)
-
 SC = SilenceDetector()
 batch_gen = test_corpus.batch_gen(cfg.batch_size, input_transformation=None)
 
@@ -116,6 +117,7 @@ with graph.as_default():
         keep_prob = tf.placeholder(tf.float32, name="dropout")
     with tf.variable_scope('logit'):
         logits = baseline.calc_logits(x, keep_prob, cfg.num_classes)
+        probs = tf.nn.softmax(logits)
         pred = tf.argmax(logits, 1)
     saver = tf.train.Saver()
 
@@ -134,8 +136,10 @@ def prepare_submission(fn_model,fn_out=None):
     #batch_y = [b['label'] for b in batch]
     if cfg.test_mode in ['test','own_test']:
         submission = dict()
+        submission_probs = dict()
     else:
         submission = []
+        submission_probs = []
     with tf.Session(graph=graph) as sess:
         # Restore variables from disk.
         saver.restore(sess, fn_model)
@@ -152,15 +156,16 @@ def prepare_submission(fn_model,fn_out=None):
                 else:
                     batch_x2 = transform_input(batch_x,cfg)
 
-                if k_batch % 50 == 0:
+                if k_batch % 2 == 0:
                     toc = time.time()
                     time_per_date = (toc - tic) / (50 * cfg.batch_size)
                     logging.info('Batch %s / %s (%ss/date)' %(k_batch+1,num_batches,time_per_date))
 
                     tic = time.time()
                     #time per date
-                prediction = sess.run(pred, feed_dict={x: batch_x2, keep_prob: 1.0})
+                prediction, all_probabilities = sess.run([pred, probs], feed_dict={x: batch_x2, keep_prob: 1.0})
                 for k,p in enumerate(prediction):
+                    prob = all_probabilities[k][p]
                     if cfg.do_detect_silence:
                         is_silence = False
                         if not decoder[p] == 'silence':
@@ -177,6 +182,7 @@ def prepare_submission(fn_model,fn_out=None):
                         fname, label = batch_y[k], decoder[p]
                     if cfg.test_mode in ['test','own_test']:
                         submission[fname] = label
+                        submission_probs[fname] = prob
                     else:
                         submission.append((fname,label))
             except EOFError:
@@ -190,20 +196,29 @@ def prepare_submission(fn_model,fn_out=None):
                 rest_batch_x2 = rest_batch_x
             else:
                 rest_batch_x2 = transform_input(rest_batch_x, cfg)
-            prediction_rest = sess.run(pred, feed_dict={x: rest_batch_x2, keep_prob: 1.0})
+            prediction_rest, probabilities_rest = sess.run([pred,probs], feed_dict={x: rest_batch_x2, keep_prob: 1.0})
             for k, p in enumerate(prediction_rest):
+                prob = probabilities_rest[k][p]
                 fname, label = rest_batch_y[k], decoder[p]
                 if cfg.test_mode in ['test', 'own_test']:
                     submission[fname] = label
+                    submission_probs[fname] = prob
                 else:
                     submission.append((fname, label))
 
 
         if fn_out is not None:
             with open(os.path.join(cfg.soundcorpus_dir, fn_out), 'w') as fout:
-                fout.write('fname,label\n')
                 for fname, label in submission.items():
+                    fout.write('fname,label\n')
                     fout.write('{},{}\n'.format(fname, label))
+
+            if cfg.write_probs:
+                with open(os.path.join(cfg.soundcorpus_dir, fn_out[:-4] + '_probs.csv'), 'w') as fout:
+                    for fname, label in submission.items():
+                        fout.write('fname,label,prob\n')
+                        fout.write('{},{},{}\n'.format(fname, label,submission_probs[fname]))
+
     return submission
 
 def acc(submission):
@@ -227,7 +242,8 @@ def acc(submission):
     print('acc w/o silence: %s' % acc_no_silence)
 if __name__ == '__main__':
     #preprocess(test_corpus, cfg, cfg.preprocessed_corpus)
-    submission = prepare_submission(fn_model=cfg.fn_model)
-    acc(submission)
+    submission = prepare_submission(fn_model=cfg.fn_model, fn_out=cfg.fn_out)
+    if cfg.test_mode is not 'test':
+        acc(submission)
 
 
