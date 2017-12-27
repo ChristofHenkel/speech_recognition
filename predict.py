@@ -99,7 +99,6 @@ cfg = Config()
 test_corpus = load_corpus(cfg)
 num_batches, rest_batch = get_num_batches_rest_batch(test_corpus,cfg.batch_size)
 decoder, encoder = load_encoder_decoder(cfg)
-SC = SilenceDetector()
 batch_gen = test_corpus.batch_gen(cfg.batch_size, input_transformation=None)
 
 
@@ -166,20 +165,7 @@ def prepare_submission(fn_model,fn_out=None):
                 prediction, all_probabilities = sess.run([pred, probs], feed_dict={x: batch_x2, keep_prob: 1.0})
                 for k,p in enumerate(prediction):
                     prob = all_probabilities[k][p]
-                    if cfg.do_detect_silence:
-                        is_silence = False
-                        if not decoder[p] == 'silence':
-                            try:
-                                is_silence = SC.is_silence2(batch_x[k])
-                            except:
-
-                                logging.warning('vad error in file %s - %s' %(k_batch,k))
-                        if is_silence:
-                            fname, label = batch_y[k], 'silence'
-                        else:
-                            fname, label = batch_y[k], decoder[p]
-                    else:
-                        fname, label = batch_y[k], decoder[p]
+                    fname, label = batch_y[k], decoder[p]
                     if cfg.test_mode in ['test','own_test']:
                         submission[fname] = label
                         submission_probs[fname] = prob
