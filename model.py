@@ -19,7 +19,6 @@ import time
 import logging
 import os
 import csv
-import numpy as np
 
 from architectures import cnn_rnn_v3_small as Baseline
 logging.basicConfig(level=logging.DEBUG)
@@ -27,7 +26,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 class Config:
     soundcorpus_dir = 'assets/corpora/corpus14/'
-    model_name = 'tmp_model75'
+    model_name = ''
     logs_path = 'models/' + model_name + '/'
     max_ckpt_to_keep = 10
     preprocessed = False
@@ -46,6 +45,15 @@ class Hparams:
     epochs_per_save = 1
     class_weights = [1.0, 1.0, 1.0, 1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.3,1]
     reg_constant = None
+    # following only works with baseline cnn_rnn_flex_v1
+    rnn_layers = 2
+    rnn_units = 256
+    rnn_attention = True
+    cnn_outpus = [54,54,54]
+    cnn_kernel_sizes = [(4, 70),(2,35),(1,20)]
+    cnn_strides = [1,1,1]
+    fc_layer_outputs = [32]
+
     #momentum = 0.2
 
 
@@ -56,7 +64,7 @@ class DisplayParams:
 
 
 class BatchParams:
-    batch_size = 128
+    batch_size = 512
     input_transformation = 'filterbank'  # mfcc, filterbank, None
     dims_input_transformation = (99, 26, 1) #nframes, nfilt, num_layers
     portion_unknown = 0.09
