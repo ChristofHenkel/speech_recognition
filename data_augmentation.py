@@ -51,10 +51,16 @@ def create_noise(fns, factor, lower_bound_silence= None, upper_bound_silence= No
             #wav_snip = wav_snip / np.random.uniform(lower_bound_silence,upper_bound_silence) #unneccessary
             wavfile.write(save_dir + fn[:-4] + str(b) + '.wav', L, wav_snip)
 
-def get_noise_color(noise_color="white"):
-    return np.array((
-        (acoustics.generator.noise(16000, color=noise_color)) / 3) *
-                                32767).astype(np.int16)
+
+def get_noise_color(noise_color="white", is_float=False):
+    if is_float:
+        return np.array((acoustics.generator.noise(16000, color=noise_color))
+                        / 3)
+    else:
+        return np.array((
+            (acoustics.generator.noise(16000, color=noise_color)) / 3) *
+                                    32767).astype(np.int16)
+
 
 def read_wav(wav_name):
     fs, wav = wavfile.read(wav_name)
@@ -80,10 +86,11 @@ def get_silence_audio(wav, sample_rate=16000, window_duration=0.03):
     return new_wav
 
 
-def add_noise(wav, noise_color='white', ratio=0.5):
-    noise = get_noise_color(noise_color)
-    #noise = noise.astype(np.float32) / np.iinfo(np.int16).max
-    wav = wav + (ratio*noise[:len(wav)])
+def add_noise(wav, noise_color='white', noise_ratio=0.5):
+    noise = get_noise_color(noise_color, is_float= True)
+    wav = wav.astype(np.float32) / np.iinfo(np.int16).max
+    wav = (((1-noise_ratio) + noise_ratio*noise[:len(wav)]) * np.iinfo(
+        np.int16).max).astype(np.int16)
     return wav
 
 def create_silence():
@@ -159,10 +166,9 @@ def create_silence3():
         silence_part = wav[:int(L*silence_part_port)]
         if len(new_wav) > L:
             new_wav = new_wav[:L]
-            #noise_color = np.random.choice(noise_color_list, 1)[0]
-            #noise = np.array(((acoustics.generator.noise(16000, color=noise_color)))).astype(np.int16)
-            #factor_mix = np.random.uniform(0.3,0.8)
-            #new_wav = (1-factor_mix)*new_wav + factor_mix*noise
+            noise_color = np.random.choice(noise_color_list, 1)[0]
+            factor_mix = np.random.uniform(0.3, 0.8)
+            new_wav = add_noise(new_wav, noise_color, noise_ratio=factor_mix)
             new_wav_name = dir_name + "_" + wav_name
             wavfile.write(os.path.join(save_dir2, new_wav_name), L,
                           new_wav)
