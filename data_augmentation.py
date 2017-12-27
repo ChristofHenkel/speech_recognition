@@ -53,7 +53,7 @@ def create_noise(fns, factor, lower_bound_silence= None, upper_bound_silence= No
 
 def get_noise_color(noise_color="white"):
     return np.array((
-        (acoustics.generator.noise(16000 * 60, color=noise_color)) / 3) *
+        (acoustics.generator.noise(16000, color=noise_color)) / 3) *
                                 32767).astype(np.int16)
 
 def read_wav(wav_name):
@@ -82,7 +82,7 @@ def get_silence_audio(wav, sample_rate=16000, window_duration=0.03):
 
 def add_noise(wav, noise_color='white', ratio=0.5):
     noise = get_noise_color(noise_color)
-    noise = noise.astype(np.float32) / np.iinfo(np.int16).max
+    #noise = noise.astype(np.float32) / np.iinfo(np.int16).max
     wav = wav + (ratio*noise[:len(wav)])
     return wav
 
@@ -138,6 +138,39 @@ def create_silence2():
 
     return new_silence
 
+def create_silence3():
+    train_dir = 'assets/train/audio/'
+    save_dir2 = 'assets/data_augmentation/silence/artificial_silence4/'
+    all_training_files = glob.glob(os.path.join(train_dir, '*', '*.wav'))
+    speech_training_files = [x for x in all_training_files if not
+    os.path.dirname(x) + "/" == bn_dir]
+    np.random.seed(1)
+    L = 16000
+    n = len(speech_training_files)
+    noise_color_list = ["white", "pink", "blue", "brown", "violet"]
+    silence_part_port = 0.05
+    new_wav = np.asarray([], np.int16)
+    for i,wav_files in enumerate(speech_training_files):
+
+        logging.log(logging.DEBUG,"wav:"+str(i)+"/"+str(n))
+        wav_name = os.path.basename(wav_files)
+        dir_name = os.path.basename(os.path.dirname(wav_files))
+        fs, wav = wavfile.read(wav_files)
+        silence_part = wav[:int(L*silence_part_port)]
+        if len(new_wav) > L:
+            new_wav = new_wav[:L]
+            #noise_color = np.random.choice(noise_color_list, 1)[0]
+            #noise = np.array(((acoustics.generator.noise(16000, color=noise_color)))).astype(np.int16)
+            #factor_mix = np.random.uniform(0.3,0.8)
+            #new_wav = (1-factor_mix)*new_wav + factor_mix*noise
+            new_wav_name = dir_name + "_" + wav_name
+            wavfile.write(os.path.join(save_dir2, new_wav_name), L,
+                          new_wav)
+            new_wav = np.asarray([], np.int16)
+        else:
+            new_wav = np.concatenate((new_wav,silence_part),axis=0)
+
+
 def create_unknown():
     train_corpus = SoundCorpus('assets/corpora/corpus2/', mode='unknown')
     save_dir = 'assets/data_augmentation/unknown/artificial_unknown/'
@@ -163,6 +196,7 @@ def create_unknown():
             n+=1
 
 if __name__ == '__main__':
-    create_unknown()
+    #create_unknown()
     #create_noise(fns,10)
     #create_silence2()
+    create_silence3()
