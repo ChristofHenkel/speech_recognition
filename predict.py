@@ -3,7 +3,6 @@ from batch_gen import SoundCorpus
 from architectures import cnn_one_fpool4_rnn as Baseline
 import os
 import logging
-from silence_detection import SilenceDetector
 from input_features import stacked_mfcc, stacked_filterbank
 import pickle
 import numpy as np
