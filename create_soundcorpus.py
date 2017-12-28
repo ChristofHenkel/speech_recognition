@@ -15,8 +15,6 @@ class SC_Config:
         self.padding = True
         self.mfcc = False
 
-        self.pure_silence_portion = 0 # How  much silence should be pure silence the rest is sampled from backgroundnoise.
-        self.background_silence_portion = 0 # to bo deleted
         self.unknown_portion = 0 # How much should be audio outside the wanted classes.
         self.possible_labels = 'yes no up down left right on off stop go unknown silence'.split()
         self.id2name = {i: name for i, name in enumerate(self.possible_labels)}
@@ -26,17 +24,14 @@ class SC_Config:
         self.data_root = 'assets/'
         self.dir_files = 'train/audio/*/*wav'
         self.validation_list_fp = 'train/validation_list.txt'
-        self.save_dir = self.data_root + 'corpora/corpus13/'
+        self.save_dir = self.data_root + 'corpora/corpus3/'
         #self.seed =np.random.seed(1)
         self.seed = 24
         self.paths_test = glob(os.path.join('assets', 'test/audio/*wav'))
-        self.dir_noise = 'assets/data_augmentation/silence/background/'
-        self.dir_art_silence = 'assets/data_augmentation/silence/artificial_silence/'
-        self.dir_art_silence2 = 'assets/data_augmentation/silence/artificial_silence3/'
-        self.amount_noise = 4000  # number of training data with label silence
-        self.portion_silence = [0.3,0.3,0.4]
+        self.dir_noise = 'assets/data_augmentation/silence/artificial_silence/'
+        self.amount_noise = 99999  # number of training data with label silence
         self.L = 16000 # length of files
-        self.artificial_unknown_portion = 0.3
+        self.artificial_unknown_portion = 0.2
         self.dir_art_unknown = 'assets/data_augmentation/unknown/artificial_unknown/'
 
         self.noise2noise = False # first fix dtype issue of random noise
@@ -89,7 +84,7 @@ class SoundCorpusCreator:
         if len_wav < self.L:    # be aware, some files are shorter than 1 sec!
             if self.config.padding:
                 # randomly insert wav into a 16k zero pad
-                padded = np.zeros([self.L])
+                padded = np.zeros([self.L],dtype=np.float32)
                 start = np.random.randint(0, self.L - len_wav)
                 end = start + len_wav
                 padded[start:end] = wav
@@ -154,24 +149,11 @@ class SoundCorpusCreator:
         elif self.config.mode == 'background':
             data = []
             amount_noise = self.config.amount_noise
-            amount_art_silence = int((amount_noise / self.config.portion_silence[0]) * self.config.portion_silence[1])
-            amount_art_silence2 = int((amount_noise / self.config.portion_silence[0]) * self.config.portion_silence[2])
 
             noise_fns = [self.config.dir_noise + fn for fn in os.listdir(self.config.dir_noise) if fn.endswith('.wav')]
             for fn in noise_fns[:amount_noise]:
                 data.append((11, '', fn))
 
-            art_silence_fns = [self.config.dir_art_silence + fn for fn in os.listdir(self.config.dir_art_silence) if
-                                fn.endswith('.wav')]
-            np.random.shuffle(art_silence_fns)
-            for fn in art_silence_fns[:amount_art_silence]:
-                data.append((11, '', fn))
-
-
-            art_silence2_fns = [self.config.dir_art_silence2 + fn for fn in os.listdir(self.config.dir_art_silence2) if fn.endswith('.wav')]
-            np.random.shuffle(art_silence2_fns)
-            for fn in art_silence2_fns[:amount_art_silence2]:
-                data.append((11, '', fn))
             np.random.shuffle(data)
             for (label_id, uid, fn) in data:
                 try:
@@ -428,3 +410,11 @@ if __name__ == '__main__':
     print(info_dict['id2name'])
     with open(cfg_train.save_dir + 'infos.p','wb') as f:
         pickle.dump(info_dict,f)
+
+    seed_ckpt = np.random.randint(1,999)
+    print(str(seed_ckpt))
+    if seed_ckpt == 258:
+        print('seed check ok')
+    else:
+        print('seed not consistent with %s' %258)
+    print(info_dict)
