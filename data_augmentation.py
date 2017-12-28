@@ -22,40 +22,70 @@ import matplotlib
 matplotlib.use('TkAgg')
 import os
 import glob
-import webrtcvad
 import logging
 import acoustics
-from batch_gen import SoundCorpus
 
 logging.basicConfig(level=logging.DEBUG)
-
+train_dir = 'assets/train/audio/'
+test_dir = 'assets/test/audio/'
 bn_dir = 'assets/train/audio/_background_noise_/'
-save_dir = 'assets/data_augmentation/silence/background/'
-fns = [fn for fn in os.listdir(bn_dir) if not fn.startswith('.')]
-fns = [fn for fn in fns if not fn.startswith('READ')]
+save_dir_background = 'assets/data_augmentation/silence/background/'
+save_dir_silence = 'assets/data_augmentation/silence/artificial_silence/'
+save_dir_unknown = 'assets/data_augmentation/unknown/artificial_unknown/'
+possible_labels = 'yes no up down left right on off stop go unknown silence'.split()
 
-seed = 24
+
+background_fns = [fn for fn in os.listdir(bn_dir) if not fn.startswith('.')]
+background_fns = [fn for fn in background_fns if not fn.startswith('READ')]
+
+seed = 1
 np.random.seed(seed=seed)
 
-def create_noise(fns, factor, lower_bound_silence= None, upper_bound_silence= None):
+def ensure_dir(file_path):
+    directory = os.path.dirname(file_path)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+
+def filter_unknown(speech_files):
+    fns = [fn for fn in speech_files if fn.split('/')[-2] not in possible_labels]
+    return fns
+
+
+def load_speech_files(include_test_files = True):
+    all_training_files = glob.glob(os.path.join(train_dir, '*', '*.wav'))
+
+    speech_files = [x for x in all_training_files if not os.path.dirname(x) + "/" == bn_dir]
+    if include_test_files:
+        all_test_files = glob.glob(os.path.join(test_dir, '*.wav'))
+        speech_files.extend(all_test_files)
+    return speech_files
+
+def split_background_files(fns, factor):
     for fn in fns:
 
         _, wav = wavfile.read(bn_dir + fn)
-        #wav = wav.astype(np.float32) / np.iinfo(np.int16).max
         L = 16000
 
         i = int(len(wav) / L) * factor
         for k in range(i):
             b = np.random.randint(1, len(wav) - L)
             wav_snip = wav[b:b + L]
-            #wav_snip = wav_snip / np.random.uniform(lower_bound_silence,upper_bound_silence) #unneccessary
-            wavfile.write(save_dir + fn[:-4] + str(b) + '.wav', L, wav_snip)
+            wavfile.write(save_dir_background + fn[:-4] + str(b) + '.wav', L, wav_snip)
 
 
-def get_noise_color(noise_color="white", is_float=False):
+def get_noise_color(noise_color="white", is_float=False, bn_fn = None):
     if is_float:
-        return np.array((acoustics.generator.noise(16000, color=noise_color))
+        if noise_color != 'background':
+            return np.array((acoustics.generator.noise(16000, color=noise_color))
                         / 3)
+        else:
+            fn = np.random.choice(bn_fn)
+            wav = read_wav(save_dir_background + fn)
+            wav = wav.astype(np.float32) / np.iinfo(np.int16).max
+            return wav
+
+
     else:
         return np.array((
             (acoustics.generator.noise(16000, color=noise_color)) / 3) *
@@ -64,145 +94,101 @@ def get_noise_color(noise_color="white", is_float=False):
 
 def read_wav(wav_name):
     fs, wav = wavfile.read(wav_name)
-    #wav = wav.astype(np.float32) / np.iinfo(np.int16).max
-    return wav
+    len_wav = len(wav)
+    if len_wav < 16000:  # be aware, some files are shorter than 1 sec!
+        padded = np.zeros([16000])
+        start = np.random.randint(0, 16000 - len_wav)
+        end = start + len_wav
+        padded[start:end] = wav
+        wav = padded
+    if len_wav > 16000:
+        print(len_wav)
+        beg = np.random.randint(0, len_wav - 16000)
+    else:
+        beg = 0
 
-def get_silence_audio(wav, sample_rate=16000, window_duration=0.03):
-    vad_mode = 1
-    vad = webrtcvad.Vad()
-    vad.set_mode(vad_mode)
-    samples_per_window = int(window_duration * sample_rate + 0.5)
-    n_segment = int(len(wav) / samples_per_window)
-    new_wav = np.asarray([],dtype=np.int16)
-    for i in range(n_segment-1):
-        #logging.log(logging.DEBUG,"segment:"+str(i)+"/"+str(n_segment))
-        start = i * samples_per_window
-        stop = (i+1) * samples_per_window
-        wav_bytes = wav[start:stop].tobytes()
-        is_speech = vad.is_speech(wav_bytes, sample_rate=sample_rate)
-        if not is_speech:
-            segmented_wav = wav[start:stop]
-            new_wav = np.concatenate((new_wav, segmented_wav), axis=0)
-    return new_wav
+    signal = wav[beg: beg + 16000]
+    return signal
 
 
-def add_noise(wav, noise_color='white', noise_ratio=0.5):
-    noise = get_noise_color(noise_color, is_float= True)
+def add_noise(wav, noise_color, noise_ratio=0.5):
+    noise = get_noise_color(noise_color, is_float= True, bn_fn = os.listdir(save_dir_background))
+
     wav = wav.astype(np.float32) / np.iinfo(np.int16).max
-    wav = (((1-noise_ratio) + noise_ratio*noise[:len(wav)]) * np.iinfo(
-        np.int16).max).astype(np.int16)
+    wav = (((1-noise_ratio)*wav + noise_ratio*noise[:len(wav)]) * np.iinfo(np.int16).max).astype(np.int16)
     return wav
 
-def create_silence():
-    train_dir = 'assets/train/audio/'
-    save_dir2 = 'assets/data_augmentation/silence/artificial_silence/'
-    all_training_files = glob.glob(os.path.join(train_dir, '*', '*.wav'))
-    speech_training_files = [x for x in all_training_files if not
-    os.path.dirname(x) + "/" == bn_dir]
+
+def create_silence(speech_files):
+
+
+    #np.random.seed(1)
     L = 16000
-    n = len(speech_training_files)
-    noise_color_list = ["white", "pink", "blue", "brown", "violet"]
-    noise_ratio = 0.5
-    is_add_noise = True
-    for i,wav_files in enumerate(speech_training_files):
+    n = len(speech_files)
+    noise_color_list = ["blue", "brown", "violet", "background"]
+    silence_part_port = 0.02
+    new_wav = np.asarray([], np.int16)
+    for i,wav_files in enumerate(speech_files):
+
         logging.log(logging.DEBUG,"wav:"+str(i)+"/"+str(n))
         wav_name = os.path.basename(wav_files)
         dir_name = os.path.basename(os.path.dirname(wav_files))
         wav = read_wav(wav_files)
-        new_wav = get_silence_audio(wav)
-        len_new_wav = len(new_wav)
-        if len_new_wav < L:
-            new_wav = np.concatenate((new_wav, np.full((L-len_new_wav), 0,dtype=float)), axis=0)
-        elif len_new_wav > L:
-            new_wav = new_wav[:L]
-        if is_add_noise:
-            noise_color = np.random.choice(noise_color_list, 1)[0]
-            new_wav = add_noise(new_wav,noise_color, noise_ratio)
-            print(wav_name, len(new_wav), noise_color)
-        else:
-            print(wav_name, len(new_wav))
-        new_wav_name = dir_name + "_" + wav_name
-        wavfile.write(os.path.join(save_dir2, new_wav_name), L,
-                      new_wav.astype(np.float32))
-
-def create_silence2():
-    train_corpus = SoundCorpus('assets/corpora/corpus14/', mode='train')
-    save_dir = 'assets/data_augmentation/silence/artificial_silence/'
-    data = [d for d in train_corpus]
-    new_silence = np.asarray([],dtype=np.int16)
-    for k,d in enumerate(data):
-        print(k)
-        wav = np.int16(d['wav'] * 2**15)
-        try:
-            new_wav = get_silence_audio(wav)
-            new_silence = np.concatenate((new_silence, new_wav), axis=0)
-        except:
-            continue
-    for k in range(int(len(new_silence)/16000)):
-        new_wav = new_silence[k*16000:(k+1)*16000]
-        new_wav_name = 'art_silence' + str(k) + '.wav'
-        wavfile.write(os.path.join(save_dir, new_wav_name), 16000,new_wav)
-
-    return new_silence
-
-def create_silence3():
-    train_dir = 'assets/train/audio/'
-    save_dir2 = 'assets/data_augmentation/silence/artificial_silence4/'
-    all_training_files = glob.glob(os.path.join(train_dir, '*', '*.wav'))
-    speech_training_files = [x for x in all_training_files if not
-    os.path.dirname(x) + "/" == bn_dir]
-    np.random.seed(1)
-    L = 16000
-    n = len(speech_training_files)
-    noise_color_list = ["white", "pink", "blue", "brown", "violet"]
-    silence_part_port = 0.05
-    new_wav = np.asarray([], np.int16)
-    for i,wav_files in enumerate(speech_training_files):
-
-        logging.log(logging.DEBUG,"wav:"+str(i)+"/"+str(n))
-        wav_name = os.path.basename(wav_files)
-        dir_name = os.path.basename(os.path.dirname(wav_files))
-        fs, wav = wavfile.read(wav_files)
-        silence_part = wav[:int(L*silence_part_port)]
+        silence_part = np.concatenate((wav[:int(L*silence_part_port)],wav[int(L*(1-silence_part_port)):]), axis=0)
         if len(new_wav) > L:
             new_wav = new_wav[:L]
-            noise_color = np.random.choice(noise_color_list, 1)[0]
-            factor_mix = np.random.uniform(0.3, 0.8)
+            noise_color = np.random.choice(noise_color_list, 1, p=[0.1,0.1,0.1,0.7])[0]
+            x = np.random.uniform(0.5, 3)
+            factor_mix = np.exp(-x)
             new_wav = add_noise(new_wav, noise_color, noise_ratio=factor_mix)
             new_wav_name = dir_name + "_" + wav_name
-            wavfile.write(os.path.join(save_dir2, new_wav_name), L,
+            wavfile.write(os.path.join(save_dir_silence, new_wav_name), L,
                           new_wav)
             new_wav = np.asarray([], np.int16)
         else:
             new_wav = np.concatenate((new_wav,silence_part),axis=0)
 
 
-def create_unknown():
-    train_corpus = SoundCorpus('assets/corpora/corpus2/', mode='unknown')
-    save_dir = 'assets/data_augmentation/unknown/artificial_unknown/'
-    data = [np.int16(d['wav'] * 2**15) for d in train_corpus]
-    parts = 10
+def create_unknown(speech_files):
+    fns = filter_unknown(speech_files)
+
+
+    data = [read_wav(fn) for fn in fns]
+    np.random.shuffle(data)
+    parts = 3
     ids = [id for id in range(parts)]
     n = 0
-    for k in range(int(len(data)/parts)):
-        print(k)
+    iters = int(len(data)/parts)
+    for k in range(iters):
+        print('%s / %s' %(k,iters))
         data0 = data[parts*k:parts*(k+1)]
 
 
         len_part = int(16000/parts)
 
-        for w in range(parts):
-            np.random.shuffle(ids)
-            new_wav = np.asarray([],dtype=np.int16)
-            for p in range(parts):
-                new_part = data0[ids[p]][len_part*p:len_part*(p+1)]
-                new_wav = np.concatenate((new_wav, new_part), axis=0)
-            new_wav_name = 'art_unknown' + str(n) + '.wav'
-            wavfile.write(save_dir + new_wav_name, 16000,new_wav)
-            n+=1
+        #for w in range(parts): #could make 3 files of 3 files but we`ll use anyway max 30% augmented
+        np.random.shuffle(ids)
+        new_wav = np.asarray([],dtype=np.int16)
+        for p in range(parts):
+            new_part = data0[ids[p]][len_part*p:len_part*(p+1)]
+            new_wav = np.concatenate((new_wav, new_part), axis=0)
+        padded_new_wav = np.zeros(16000,dtype=np.int16)
+        padded_new_wav[:new_wav.shape[0]] = new_wav
+        new_wav_name = 'art_unknown' + str(n) + '.wav'
+        wavfile.write(save_dir_unknown + new_wav_name, 16000,padded_new_wav)
+        n+=1
 
 if __name__ == '__main__':
-    #create_unknown()
-    #create_noise(fns,10)
-    #create_silence2()
-    create_silence3()
+    ensure_dir(save_dir_background)
+    ensure_dir(save_dir_silence)
+    ensure_dir(save_dir_unknown)
+
+    split_background_files(background_fns,2)
+    speech_files = load_speech_files()
+    create_silence(speech_files)
+    train_files = load_speech_files(include_test_files=False)
+    create_unknown(train_files)
+    if np.random.randint(1,999) == 979:
+        print('seed check ok')
+    else:
+        print('seed not consistent')
