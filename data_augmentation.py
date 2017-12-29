@@ -96,7 +96,7 @@ def read_wav(wav_name):
     fs, wav = wavfile.read(wav_name)
     len_wav = len(wav)
     if len_wav < 16000:  # be aware, some files are shorter than 1 sec!
-        padded = np.zeros([16000])
+        padded = np.zeros([16000], dtype=np.int16)
         start = np.random.randint(0, 16000 - len_wav)
         end = start + len_wav
         padded[start:end] = wav
@@ -111,7 +111,7 @@ def read_wav(wav_name):
     return signal
 
 
-def add_noise(wav, noise_color, noise_ratio=0.5):
+def add_noise(wav, noise_color, noise_ratio):
     noise = get_noise_color(noise_color, is_float= True, bn_fn = os.listdir(save_dir_background))
 
     wav = wav.astype(np.float32) / np.iinfo(np.int16).max
@@ -138,8 +138,8 @@ def create_silence(speech_files):
         if len(new_wav) > L:
             new_wav = new_wav[:L]
             noise_color = np.random.choice(noise_color_list, 1, p=[0.1,0.1,0.1,0.7])[0]
-            x = np.random.uniform(0.5, 3)
-            factor_mix = np.exp(-x)
+            factor_mix = np.random.uniform()
+            #factor_mix = np.exp(-x)
             new_wav = add_noise(new_wav, noise_color, noise_ratio=factor_mix)
             new_wav_name = dir_name + "_" + wav_name
             wavfile.write(os.path.join(save_dir_silence, new_wav_name), L,
@@ -188,7 +188,8 @@ if __name__ == '__main__':
     create_silence(speech_files)
     train_files = load_speech_files(include_test_files=False)
     create_unknown(train_files)
-    if np.random.randint(1,999) == 979:
+    seed_ckpt = np.random.randint(1,999)
+    if seed_ckpt == 979:
         print('seed check ok')
     else:
         print('seed not consistent')

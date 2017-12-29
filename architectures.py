@@ -645,11 +645,11 @@ class cnn_rnn_flex_v1:
 
     def calc_logits(self, x, keep_prob, num_classes):
         x2 = x
-        x2 = layers.conv2d(x2, num_outputs=self.cfg.cnn_outpus[0], kernel_size=self.cfg.cnn_kernel_sizes[0], stride=self.cfg.cnn_strides[0], activation_fn=tf.nn.elu)
+        x2 = layers.conv2d(x2, num_outputs=self.cfg.cnn_outpus[0], kernel_size=self.cfg.cnn_kernel_sizes[0], stride=self.cfg.cnn_strides[0], activation_fn=self.cfg.cnn_activation_func)
         x2 = layers.max_pool2d(x2, kernel_size=(3, 1), stride=1)
-        x2 = layers.conv2d(x2, num_outputs=self.cfg.cnn_outpus[1], kernel_size=self.cfg.cnn_kernel_sizes[1], stride=self.cfg.cnn_strides[1], activation_fn=tf.nn.elu)
+        x2 = layers.conv2d(x2, num_outputs=self.cfg.cnn_outpus[1], kernel_size=self.cfg.cnn_kernel_sizes[1], stride=self.cfg.cnn_strides[1], activation_fn=self.cfg.cnn_activation_func)
         x2 = layers.max_pool2d(x2, kernel_size=(2, 1), stride=1)
-        x2 = layers.conv2d(x2, num_outputs=self.cfg.cnn_outpus[2], kernel_size=self.cfg.cnn_kernel_sizes[2], stride=self.cfg.cnn_strides[2], activation_fn=tf.nn.elu)
+        x2 = layers.conv2d(x2, num_outputs=self.cfg.cnn_outpus[2], kernel_size=self.cfg.cnn_kernel_sizes[2], stride=self.cfg.cnn_strides[2], activation_fn=self.cfg.cnn_activation_func)
         x2 = layers.max_pool2d(x2, kernel_size=(2, 1), stride=1)
 
         x2 = tf.unstack(x2,axis=3)

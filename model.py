@@ -25,7 +25,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class Config:
-    soundcorpus_dir = 'assets/corpora/corpus14/'
+    soundcorpus_dir = 'assets/corpora/corpus3/'
     model_name = ''
     logs_path = 'models/' + model_name + '/'
     max_ckpt_to_keep = 10
@@ -52,6 +52,7 @@ class Hparams:
     cnn_outpus = [54,54,54]
     cnn_kernel_sizes = [(4, 70),(2,35),(1,20)]
     cnn_strides = [1,1,1]
+    cnn_activation_func = tf.nn.relu # tf.nn.elu
     fc_layer_outputs = [32]
 
     #momentum = 0.2

@@ -413,8 +413,8 @@ if __name__ == '__main__':
 
     seed_ckpt = np.random.randint(1,999)
     print(str(seed_ckpt))
-    if seed_ckpt == 258:
+    if seed_ckpt == 19:
         print('seed check ok')
     else:
-        print('seed not consistent with %s' %258)
+        print('seed not consistent with %s' %19)
     print(info_dict)
