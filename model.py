@@ -302,11 +302,11 @@ class Model:
                                               feed_dict={self.x: batch_x, self.y: batch_y, self.keep_prob: self.h_params.keep_prob})
 
                         print(c, acc)
-                        for k in range(11):
+                        for k in range(12):
                             print(str(self.decoder[k]) + ' ' + str(cm[k, k] / sum(cm[k, :])))
                         if self.display_params.print_confusion_matrix:
                             print(cm)
-                        #print(self.advanced_gen.batches_counter)
+                        print(' ')
 
 
                     step += 1
@@ -331,12 +331,11 @@ class Model:
                 print(' ')
                 print("test:", c_test, acc_test)
                 print(cm_test)
-                print(type(cm_test))
                 for k in range(12):
                     print(str(self.decoder[k]) + ' ' + str(cm_test[k,k]/sum(cm_test[k,:])))
                 row = [acc_test] + [cm_test[k,k]/sum(cm_test[k,:]) for k in range(12)]
                 self.write_result_to_csv(row)
-                #print(' ')
+                print(' ')
                 #print(self.lr)
                 if epoch % self.batch_params.unknown_change_epochs == 0:
                     self.advanced_gen.portion_unknown = self.advanced_gen.portion_unknown * self.batch_params.unknown_change_rate
