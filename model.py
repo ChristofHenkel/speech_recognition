@@ -38,7 +38,7 @@ class Hparams:
     keep_prob = 0.9
     max_gradient = 5
     tf_seed = 1
-    learning_rate = 0.00005
+    learning_rate = 0.0001
     lr_decay_rate = 0.99
     lr_change_steps = 100
     epochs = 40
@@ -302,6 +302,8 @@ class Model:
                                               feed_dict={self.x: batch_x, self.y: batch_y, self.keep_prob: self.h_params.keep_prob})
 
                         print(c, acc)
+                        for k in range(11):
+                            print(str(self.decoder[k]) + ' ' + str(cm[k, k] / sum(cm[k, :])))
                         if self.display_params.print_confusion_matrix:
                             print(cm)
                         #print(self.advanced_gen.batches_counter)
@@ -320,16 +322,19 @@ class Model:
                                                                   self.keep_prob: 1})
                 valid_writer.add_summary(summary_val, global_step)
                 print("validation:", c_val, acc_val)
+                print(cm_val)
                 for k in range(11):
-                    print(str(self.decoder[k]) + ' ' + str(cm_val[k,k]/sum(cm_val[:,k])))
+                    print(str(self.decoder[k]) + ' ' + str(cm_val[k,k]/sum(cm_val[k,:])))
                 c_test, acc_test, cm_test= sess.run([self.cost, self.accuracy, self.confusion_matrix],
                                                        feed_dict={self.x: self.test_batch_x, self.y: self.test_batch_y,
                                                                   self.keep_prob: 1})
                 print(' ')
                 print("test:", c_test, acc_test)
+                print(cm_test)
+                print(type(cm_test))
                 for k in range(12):
-                    print(str(self.decoder[k]) + ' ' + str(cm_test[k,k]/sum(cm_test[:,k])))
-                row = [acc_test] + [cm_test[k,k]/sum(cm_test[:,k]) for k in range(12)]
+                    print(str(self.decoder[k]) + ' ' + str(cm_test[k,k]/sum(cm_test[k,:])))
+                row = [acc_test] + [cm_test[k,k]/sum(cm_test[k,:]) for k in range(12)]
                 self.write_result_to_csv(row)
                 #print(' ')
                 #print(self.lr)
