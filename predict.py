@@ -1,6 +1,6 @@
 import tensorflow as tf
 from batch_gen import SoundCorpus
-from architectures import cnn_one_fpool4_rnn as Baseline
+from architectures import cnn_rnn_flex_v1 as Baseline
 import os
 import logging
 from input_features import stacked_mfcc, stacked_filterbank
@@ -10,21 +10,30 @@ import time
 logging.basicConfig(level=logging.INFO)
 
 class Config:
-    soundcorpus_dir = 'assets/corpora/corpus14/'
-    batch_size = 128
+    soundcorpus_dir = 'assets/corpora/corpus3/'
+    batch_size = 512
     is_training = False
     use_batch_norm = False
     keep_prob = 1
-    test_mode = 'own_test'
+    test_mode = 'test'
     input_transformation = 'filterbank'
     dims_mfcc = (99,26,1)
     do_detect_silence = False
     num_classes = 12
     preprocessed = False
     preprocessed_corpus = test_mode + '_preprocessed.p'
-    fn_model = 'models/tmp_model14/model_mfcc_bsize512_e49.ckpt'
-    fn_out = 'test.csv'
-    write_probs = True
+    fn_model = 'models/t_model12/model_mfcc_bsize512_e66.ckpt'
+    fn_out = 't_model12_e66_submission.csv'
+    write_probs = False
+
+    rnn_layers = 2
+    rnn_units = 256
+    rnn_attention = False
+    cnn_outpus = [54,54,54]
+    cnn_kernel_sizes = [(4, 70),(2,35),(1,20)]
+    cnn_strides = [1,1,1]
+    cnn_activation_func = tf.nn.relu # tf.nn.elu
+    fc_layer_outputs = [32]
 
 
 def load_corpus(cfg):
