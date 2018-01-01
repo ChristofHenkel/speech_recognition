@@ -169,7 +169,11 @@ class BatchGenerator:
                     train_data = next(gen_unknown)
             else:
                 try:
-                    train_data = next(gen_silence)
+                    silence_type = np.random.choice(['pure','noise'])
+                    if silence_type == 'noise':
+                        train_data = next(gen_silence)
+                    else:
+                        train_data = {'wav' : np.zeros(16000, dtype=np.float32),'label' : 11}
 
                 except EOFError:
                     print('restarting gen_silence')
