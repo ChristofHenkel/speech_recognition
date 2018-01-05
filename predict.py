@@ -1,6 +1,6 @@
 import tensorflow as tf
 from batch_gen import SoundCorpus
-from architectures import cnn_rnn_flex_v1 as Baseline
+from architectures import cnn_one_fpool4_rnn as Baseline
 import os
 import logging
 from input_features import stacked_mfcc, stacked_filterbank
@@ -15,16 +15,16 @@ class Config:
     is_training = False
     use_batch_norm = False
     keep_prob = 1
-    test_mode = 'test'
+    test_mode = 'own_test'
     input_transformation = 'filterbank'
     dims_mfcc = (99,26,1)
     do_detect_silence = False
     num_classes = 12
     preprocessed = False
     preprocessed_corpus = test_mode + '_preprocessed.p'
-    fn_model = 'models/t_model12/model_mfcc_bsize512_e66.ckpt'
-    fn_out = 't_model12_e66_submission.csv'
-    write_probs = False
+    fn_model = 'models/tmp_model14/model_mfcc_bsize512_e49.ckpt'
+    fn_out = 'tmp_model14_own_test.csv'
+    write_probs = True
 
     rnn_layers = 2
     rnn_units = 256
@@ -172,7 +172,7 @@ def prepare_submission(fn_model,fn_out=None):
                     #time per date
                 prediction, all_probabilities = sess.run([pred, probs], feed_dict={x: batch_x2, keep_prob: 1.0})
                 for k,p in enumerate(prediction):
-                    prob = all_probabilities[k][p]
+                    prob = all_probabilities[k]
                     fname, label = batch_y[k], decoder[p]
                     if cfg.test_mode in ['test','own_test']:
                         submission[fname] = label
@@ -192,7 +192,7 @@ def prepare_submission(fn_model,fn_out=None):
                 rest_batch_x2 = transform_input(rest_batch_x, cfg)
             prediction_rest, probabilities_rest = sess.run([pred,probs], feed_dict={x: rest_batch_x2, keep_prob: 1.0})
             for k, p in enumerate(prediction_rest):
-                prob = probabilities_rest[k][p]
+                prob = probabilities_rest[k]
                 fname, label = rest_batch_y[k], decoder[p]
                 if cfg.test_mode in ['test', 'own_test']:
                     submission[fname] = label
@@ -211,7 +211,20 @@ def prepare_submission(fn_model,fn_out=None):
                 with open(os.path.join(cfg.soundcorpus_dir, fn_out[:-4] + '_probs.csv'), 'w') as fout:
                     fout.write('fname,label,prob\n')
                     for fname, label in submission.items():
-                        fout.write('{},{},{}\n'.format(fname, label,submission_probs[fname]))
+                        fout.write('{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n'.format(fname, label,
+                                                                                        submission_probs[fname][0],
+                                                                                        submission_probs[fname][1],
+                                                                                        submission_probs[fname][2],
+                                                                                        submission_probs[fname][3],
+                                                                                        submission_probs[fname][4],
+                                                                                        submission_probs[fname][5],
+                                                                                        submission_probs[fname][6],
+                                                                                        submission_probs[fname][7],
+                                                                                        submission_probs[fname][8],
+                                                                                        submission_probs[fname][9],
+                                                                                        submission_probs[fname][10],
+                                                                                        submission_probs[fname][11]
+                                                                                        ))
 
     return submission
 
