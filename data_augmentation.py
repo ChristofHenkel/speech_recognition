@@ -24,7 +24,8 @@ import os
 import glob
 import logging
 import acoustics
-
+from submission_utils import load_submission_probs
+import shutil
 logging.basicConfig(level=logging.DEBUG)
 train_dir = 'assets/train/audio/'
 test_dir = 'assets/test/audio/'
@@ -32,6 +33,7 @@ bn_dir = 'assets/train/audio/_background_noise_/'
 save_dir_background = 'assets/data_augmentation/silence/background/'
 save_dir_silence = 'assets/data_augmentation/silence/artificial_silence/'
 save_dir_unknown = 'assets/data_augmentation/unknown/artificial_unknown/'
+save_dir_pseudo_labels = 'assets/data_augmentation/pseudo_labeled/'
 possible_labels = 'yes no up down left right on off stop go unknown silence'.split()
 
 
@@ -50,6 +52,27 @@ def ensure_dir(file_path):
 def filter_unknown(speech_files):
     fns = [fn for fn in speech_files if fn.split('/')[-2] not in possible_labels]
     return fns
+
+
+
+def create_pseudo_labels(submission, submission_probs, threshold=0.98):
+    for p in possible_labels:
+        ensure_dir(save_dir_pseudo_labels + p + '/')
+    for k, fn in enumerate(submission_probs):
+        if k % 1000 == 0:
+            print(k)
+        if max(submission_probs[fn]) > threshold:
+            fp = test_dir + fn
+            label = submission[fn]
+            dst_fp = save_dir_pseudo_labels + label + '/' + fn
+            if os.path.exists(dst_fp):
+                os.remove(dst_fp)
+            shutil.copy(fp,dst_fp)
+
+
+
+
+
 
 
 def load_speech_files(include_test_files = True):
@@ -148,6 +171,20 @@ def create_silence(speech_files):
         else:
             new_wav = np.concatenate((new_wav,silence_part),axis=0)
 
+def create_more_silence():
+    amount = 5000
+    all_fns = [fn for fn in os.listdir(save_dir_silence) if fn.endswith('.wav')]
+    for k in range(amount):
+        print(k)
+        fns = [save_dir_silence + fn for fn in np.random.choice(all_fns,2,replace=False)]
+        fs1, wav1 = wavfile.read(fns[0])
+        fs2, wav2 = wavfile.read(fns[1])
+        f = np.random.uniform(0.4,0.6)
+        new_wav = (f * wav1 + (1-f) * wav2)
+        new_wav = new_wav.astype(np.int16)
+        new_wav_name = 'more_silence_' + str(k) + '.wav'
+        wavfile.write(os.path.join(save_dir_silence, new_wav_name), 16000 ,new_wav)
+
 
 def create_unknown(speech_files):
     fns = filter_unknown(speech_files)
@@ -186,6 +223,7 @@ if __name__ == '__main__':
     split_background_files(background_fns,2)
     speech_files = load_speech_files()
     create_silence(speech_files)
+    create_more_silence()
     train_files = load_speech_files(include_test_files=False)
     create_unknown(train_files)
     seed_ckpt = np.random.randint(1,999)
@@ -193,3 +231,7 @@ if __name__ == '__main__':
         print('seed check ok')
     else:
         print('seed not consistent')
+
+
+####
+    s1, sp1 = load_submission_probs('assets/corpora/corpus3/t3_model17_e29_2_probs.csv')

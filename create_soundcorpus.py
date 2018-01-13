@@ -24,16 +24,17 @@ class SC_Config:
         self.data_root = 'assets/'
         self.dir_files = 'train/audio/*/*wav'
         self.validation_list_fp = 'train/validation_list.txt'
-        self.save_dir = self.data_root + 'corpora/corpus3/'
+        self.save_dir = self.data_root + 'corpora/corpus4/'
         #self.seed =np.random.seed(1)
         self.seed = 24
         self.paths_test = glob(os.path.join('assets', 'test/audio/*wav'))
         self.dir_noise = 'assets/data_augmentation/silence/artificial_silence/'
+        self.dir_pseudo_labels = 'assets/data_augmentation/pseudo_labeled/'
         self.amount_noise = 99999  # number of training data with label silence
         self.L = 16000 # length of files
         self.artificial_unknown_portion = 0.2
         self.dir_art_unknown = 'assets/data_augmentation/unknown/artificial_unknown/'
-
+        self.use_pseudo_labels = True
         self.noise2noise = False # first fix dtype issue of random noise
 
 
@@ -98,11 +99,24 @@ class SoundCorpusCreator:
         signal = wav[beg: beg + self.L]
         return signal
 
+    def load_pseudo_data(self):
+        pseudo_data = []
+        for folder in [f for f in os.listdir(self.config.dir_pseudo_labels) if not f.startswith('.')]:
+            for fn in os.listdir(self.config.dir_pseudo_labels + folder + '/'):
+                fp = self.config.dir_pseudo_labels + folder + '/' + fn
+                pseudo_data.append((self.config.name2id[folder], '_', fp))
+        return pseudo_data
+
     def data_gen(self):
         if self.config.mode == 'train':
 
             data = self.train_data
             data = [d for d in data if d[0] != self.config.name2id['unknown']]
+            if self.config.use_pseudo_labels:
+                pseudo_data = self.load_pseudo_data()
+                pseudo_data = [d for d in pseudo_data if d[0] != self.config.name2id['unknown']]
+                pseudo_data = [d for d in pseudo_data if d[0] != self.config.name2id['silence']]
+                data.extend(pseudo_data)
             np.random.shuffle(data)
             for (label_id, uid, fname) in data:
                 try:
@@ -177,6 +191,10 @@ class SoundCorpusCreator:
                 artificial_unknown = [(self.config.name2id['unknown'],'',fn) for fn in artificial_unknown_fns]
                 print(len(artificial_unknown))
                 data.extend(artificial_unknown)
+            if self.config.use_pseudo_labels:
+                pseudo_data = self.load_pseudo_data()
+                pseudo_data = [d for d in pseudo_data if d[0] == self.config.name2id['unknown']]
+                data.extend(pseudo_data)
             np.random.shuffle(data)
             print(len(data))
             for (label_id, uid, fname) in data:
@@ -386,10 +404,6 @@ if __name__ == '__main__':
     cfg_unknown.unknown_portion = 1
     unknown_corpus = SoundCorpusCreator(cfg_unknown)
     len_unknown = unknown_corpus.build_corpus()
-
-    #cfg_silence = SC_Config(mode='silence')
-    #silence_corpus = SoundCorpusCreator(cfg_silence)
-    #len_silence = silence_corpus.build_corpus()
 
     cfg_own_test = SC_Config(mode='test')
     own_test_corpus = SoundCorpusCreator(cfg_own_test)

@@ -20,38 +20,39 @@ import logging
 import os
 import csv
 
-from architectures import cnn_rnn_v3_small as Baseline
+from architectures import cnn_rnn_flex_v3 as Baseline
 logging.basicConfig(level=logging.DEBUG)
 
 
 class Config:
-    soundcorpus_dir = 'assets/corpora/corpus3/'
-    model_name = ''
+    soundcorpus_dir = 'assets/corpora/corpus4/'
+    model_name = 'vgg_4'
     logs_path = 'models/' + model_name + '/'
-    max_ckpt_to_keep = 10
+    max_ckpt_to_keep = 30
     preprocessed = False
 
 
 class Hparams:
     is_training = True
     use_batch_norm = False
-    keep_prob = 0.9
+    keep_prob = 0.7
     max_gradient = 5
-    tf_seed = 1
-    learning_rate = 0.0001
+    tf_seed = 4
+    learning_rate = 0.0005
     lr_decay_rate = 0.99
     lr_change_steps = 100
-    epochs = 40
+    epochs = 30
     epochs_per_save = 1
-    class_weights = [1.0, 1.0, 1.0, 1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.3,1]
+    class_weights = [1.0, 1.0, 1.0, 1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.8,0.8]
+    #class_weights = [1.0, 1.0]
     reg_constant = None
     # following only works with baseline cnn_rnn_flex_v1
     rnn_layers = 2
     rnn_units = 256
     rnn_attention = True
-    cnn_outpus = [54,54,54]
-    cnn_kernel_sizes = [(4, 70),(2,35),(1,20)]
-    cnn_strides = [1,1,1]
+    cnn_outpus = [8,8,16,16,32,32]
+    cnn_kernel_sizes = [(3, 3),(3, 3),(3, 3),(3, 3),(3, 3),(3, 3)]
+    cnn_strides = [1,1,1,1,1,1]
     cnn_activation_func = tf.nn.relu # tf.nn.elu
     fc_layer_outputs = [32]
 
@@ -70,9 +71,9 @@ class BatchParams:
     dims_input_transformation = (99, 26, 1) #nframes, nfilt, num_layers
     portion_unknown = 0.09
     portion_silence = 0.09
-    portion_noised = 1
+    portion_noised = 0.7
     lower_bound_noise_mix = 0.4
-    upper_bound_noise_mix = 0.8
+    upper_bound_noise_mix = 0.6
     noise_unknown = True
     noise_silence = True
     unknown_change_epochs = 100
@@ -109,10 +110,13 @@ class Model:
                                               dims_input_transformation=self.batch_params.dims_input_transformation)
         self.test_batch_x, test_batch_y = next(test_gen)
         self.test_batch_y = [self.fname2label[b] for b in test_batch_y]
+
         self.advanced_gen = BatchGenerator(self.batch_params,
                                            self.train_corpus,
                                            self.noise_corpus,
                                            self.unknown_corpus)
+        if self.advanced_gen.train_silence_detection:
+            self.test_batch_y = [1 if i == 11 else 0 for i in self.test_batch_y]
 
         if self.cfg.preprocessed:
             self.advanced_gen = self.corpus_gen('test.p')
@@ -122,6 +126,8 @@ class Model:
             self.num_classes = len(self.decoder) - 1 #11
         else:
             self.num_classes = len(self.decoder)
+        if self.advanced_gen.train_silence_detection:
+            self.num_classes = 2
         self.training_iters = self.train_corpus.len
         self.result = None
 
@@ -302,13 +308,21 @@ class Model:
                                               feed_dict={self.x: batch_x, self.y: batch_y, self.keep_prob: self.h_params.keep_prob})
 
                         print(c, acc)
-                        for k in range(12):
+                        for k in range(self.num_classes):
                             print(str(self.decoder[k]) + ' ' + str(cm[k, k] / sum(cm[k, :])))
                         if self.display_params.print_confusion_matrix:
                             print(cm)
                         print(' ')
-
-
+                        #c_test, acc_test, cm_test = sess.run([self.cost, self.accuracy, self.confusion_matrix],
+                        #                                     feed_dict={self.x: self.test_batch_x,
+                        #                                                self.y: self.test_batch_y,
+                        #                                                self.keep_prob: 1})
+                        #print(' ')
+                        #print("test:", c_test, acc_test)
+                        #print(cm_test)
+                        #model_name = 'model_%s_bsize%s_e%s_s%s.ckpt' % ('mfcc', self.batch_params.batch_size, epoch,step)
+                        #s_path = self.saver.save(sess, self.cfg.logs_path + model_name)
+                        #print('saving under ' + s_path)
                     step += 1
                     global_step += 1
                 # if epoch % cfg.epochs_per_save == 0:
@@ -341,7 +355,7 @@ class Model:
                     self.advanced_gen.portion_unknown = self.advanced_gen.portion_unknown * self.batch_params.unknown_change_rate
 
             print("Optimization Finished!")
-            self.result = [['train_acc',acc],['val_acc',acc_val]]
+            #self.result = [['train_acc',acc],['val_acc',acc_val]]
         pass
 
     #def debug(self):

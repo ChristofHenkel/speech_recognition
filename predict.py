@@ -1,6 +1,6 @@
 import tensorflow as tf
 from batch_gen import SoundCorpus
-from architectures import cnn_one_fpool4_rnn as Baseline
+from architectures import cnn_rnn_flex_v3 as Baseline
 import os
 import logging
 from input_features import stacked_mfcc, stacked_filterbank
@@ -10,7 +10,7 @@ import time
 logging.basicConfig(level=logging.INFO)
 
 class Config:
-    soundcorpus_dir = 'assets/corpora/corpus3/'
+    soundcorpus_dir = 'assets/corpora/corpus4/'
     batch_size = 512
     is_training = False
     use_batch_norm = False
@@ -22,16 +22,17 @@ class Config:
     num_classes = 12
     preprocessed = False
     preprocessed_corpus = test_mode + '_preprocessed.p'
-    fn_model = 'models/tmp_model14/model_mfcc_bsize512_e49.ckpt'
-    fn_out = 'tmp_model14_own_test.csv'
+    fn_model = 'models/vgg_4/model_mfcc_bsize512_e14.ckpt'
+    fn_out = 'vgg_4_e14.csv'
     write_probs = True
+    predict_silence = False
 
     rnn_layers = 2
     rnn_units = 256
-    rnn_attention = False
-    cnn_outpus = [54,54,54]
-    cnn_kernel_sizes = [(4, 70),(2,35),(1,20)]
-    cnn_strides = [1,1,1]
+    rnn_attention = True
+    cnn_outpus = [8, 8, 16, 16, 32, 32]
+    cnn_kernel_sizes = [(3, 3), (3, 3), (3, 3), (3, 3), (3, 3), (3, 3)]
+    cnn_strides = [1, 1, 1, 1, 1, 1]
     cnn_activation_func = tf.nn.relu # tf.nn.elu
     fc_layer_outputs = [32]
 
@@ -210,21 +211,26 @@ def prepare_submission(fn_model,fn_out=None):
             if cfg.write_probs:
                 with open(os.path.join(cfg.soundcorpus_dir, fn_out[:-4] + '_probs.csv'), 'w') as fout:
                     fout.write('fname,label,prob\n')
-                    for fname, label in submission.items():
-                        fout.write('{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n'.format(fname, label,
-                                                                                        submission_probs[fname][0],
-                                                                                        submission_probs[fname][1],
-                                                                                        submission_probs[fname][2],
-                                                                                        submission_probs[fname][3],
-                                                                                        submission_probs[fname][4],
-                                                                                        submission_probs[fname][5],
-                                                                                        submission_probs[fname][6],
-                                                                                        submission_probs[fname][7],
-                                                                                        submission_probs[fname][8],
-                                                                                        submission_probs[fname][9],
-                                                                                        submission_probs[fname][10],
-                                                                                        submission_probs[fname][11]
-                                                                                        ))
+                    if cfg.predict_silence:
+                        for fname, label in submission.items():
+                            fout.write('{},{},{}\n'.format(fname, label,submission_probs[fname][0]))
+
+                    else:
+                        for fname, label in submission.items():
+                            fout.write('{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n'.format(fname, label,
+                                                                                            submission_probs[fname][0],
+                                                                                            submission_probs[fname][1],
+                                                                                            submission_probs[fname][2],
+                                                                                            submission_probs[fname][3],
+                                                                                            submission_probs[fname][4],
+                                                                                            submission_probs[fname][5],
+                                                                                            submission_probs[fname][6],
+                                                                                            submission_probs[fname][7],
+                                                                                            submission_probs[fname][8],
+                                                                                            submission_probs[fname][9],
+                                                                                            submission_probs[fname][10],
+                                                                                            submission_probs[fname][11]
+                                                                                            ))
 
     return submission
 
@@ -235,18 +241,30 @@ def acc(submission):
         comparison = [(p,submission[p],decoder[fname2label[p]]) for p in submission]
     else:
         comparison = [('_', decoder[p[0]], p[1]) for p in submission]
-    acc = [a[1] == a[2] for a in comparison].count(True)/len(comparison)
-    no_silence = [c for c in comparison if c[2] != 'silence']
-    acc_dict = {}
-    for l in encoder:
-        label_part = [c for c in comparison if c[2] == l]
-        acc_label = [a[1] == a[2] for a in label_part].count(True)/len(label_part)
-        acc_dict[l] = acc_label
-    print(acc_dict)
+    if not cfg.predict_silence:
+        acc = [a[1] == a[2] for a in comparison].count(True)/len(comparison)
+        no_silence = [c for c in comparison if c[2] != 'silence']
+        acc_dict = {}
+        for l in encoder:
+            label_part = [c for c in comparison if c[2] == l]
+            acc_label = [a[1] == a[2] for a in label_part].count(True)/len(label_part)
+            acc_dict[l] = acc_label
+        print(acc_dict)
 
-    acc_no_silence = [a[1] == a[2] for a in no_silence].count(True)/len(no_silence)
-    print('acc: %s' %acc)
-    print('acc w/o silence: %s' % acc_no_silence)
+        acc_no_silence = [a[1] == a[2] for a in no_silence].count(True)/len(no_silence)
+        print('acc: %s' %acc)
+        print('acc w/o silence: %s' % acc_no_silence)
+    else:
+
+        comparison = [(fn, encoder[submission[fn]], 1 if fname2label[fn] == 11 else 0) for fn in submission]
+        true_silences = [fn for fn in comparison if fn[2] == 1]
+        true_nosilences = [fn for fn in comparison if fn[2] == 0]
+        acc1 = [a[1] == a[2] for a in true_silences].count(True) / len(true_silences)
+        acc2 = [a[1] == a[2] for a in true_nosilences].count(True) / len(true_nosilences)
+        acc_total = [a[1] == a[2] for a in comparison].count(True) / len(comparison)
+        print('acc on silence %s' %acc1)
+        print('acc on no silence %s' % acc2)
+        print('acc total %s' % acc_total)
 if __name__ == '__main__':
     #preprocess(test_corpus, cfg, cfg.preprocessed_corpus)
     submission = prepare_submission(fn_model=cfg.fn_model, fn_out=cfg.fn_out)

@@ -111,6 +111,7 @@ class BatchGenerator:
         self.all_gen = self.batch_gen()
         self.batches_counter = 0
         self.seed = np.random.seed(BatchParams.seed)
+        self.train_silence_detection = False
 
 
     @staticmethod
@@ -188,7 +189,13 @@ class BatchGenerator:
 
             raw_wav = train_data['wav']
             noise_wav = noise['wav']
-            label = train_data['label']
+            if self.train_silence_detection:
+                if train_data['label'] == 11:
+                    label = 1
+                else:
+                    label = 0
+            else:
+                label = train_data['label']
             factor_mix = 1- np.random.uniform(self.lower_bound_noise_mix,self.upper_bound_noise_mix)
             if np.random.rand() < self.portion_noised:
                 if type is 'silence':

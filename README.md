@@ -104,7 +104,39 @@ analyze_corpus.py
 ## TODOS
 
 * fix seed
-* refactor model class
-* portion of unknown in valid set
-* write config
 
+* try with 40 nfilts
+* try with one more layer lstm
+* try more hidden units lstm
+* one more layer conv
+
+* unknown increase rate
+* augment unknown labels
+* stable seed
+* submission + probs
+
+* copy own_test corpus from Downloads
+* cm at acc
+* overlap and rolling at train data
+* load new probs to K80-3
+
+* t3-model17_e29 very good in all but silence and unknown
+* download t_model17_e27
+
+* models/silence_detection/model_mfcc_bsize64_e1_s105.ckpt [[409   2][  3  38]]
+* models/silence_detection/model_mfcc_bsize64_e1_s70.ckpt [[410   1][  4  37]]
+
+17
+33
+
+Distribution
+
+yes 0.08
+on = 0.08
+unknown 0.09
+silence 0.09
+
+t_model11_e48_submission.csv scores 0.08 on yes
+t_model11_e48_submission.csv scores 0.07 on unknown
+t_model11_e48_submission.csv scores 0.04 on silence
+t_model11_e48_submission.csv scores 0.07 on on
